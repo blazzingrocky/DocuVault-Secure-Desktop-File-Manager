@@ -9,7 +9,6 @@ import subprocess
 from tkinter import ttk
 class AutomationWindow(tk.Toplevel):
 
-
     def __init__(self, parent, automation_folder):
         super().__init__(parent)
         self.title("Automation Window")
