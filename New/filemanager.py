@@ -14,7 +14,8 @@ class FileManagerGUI: #The previous code is shortened
         self.root = tk.Tk()
         self.root.title("DocuVault: Secure Desktop File Manager")
         self.root.geometry("600x400")
-        self.bin_dir = "C:/Users/jbsch/OneDrive/Desktop/DocuVault/SWE_bin"
+        self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
+        os.makedirs(self.bin_dir, exist_ok=True)
 
 
         choice = messagebox.askyesno("Directory Choice", "Do you want to start in the current directory?")
