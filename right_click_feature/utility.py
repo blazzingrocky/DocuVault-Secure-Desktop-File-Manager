@@ -18,6 +18,7 @@ class CustomDirectoryDialog(tk.Toplevel):
         self.title("Select Destination Folder")
         self.geometry("600x400")
         self.selected_path = None
+        self.temp_selection = None
         self.current_dir = current_dir
         self.grab_set()
         
