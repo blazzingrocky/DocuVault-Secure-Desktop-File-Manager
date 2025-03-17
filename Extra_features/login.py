@@ -5,12 +5,14 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 from database import create_database, register_user, login_user
 from automation import AutomationWindow
+
 from filemanager import FileManagerGUI
 from utility import CustomDirectoryDialog
 
 class LoginPage(tk.Tk):
     def __init__(self):
         super().__init__()
+
         
         # Configure window
         self.title("DocuVault")
@@ -124,6 +126,7 @@ class LoginPage(tk.Tk):
             app.run()
         else:
             messagebox.showerror("Login Failed", "Invalid username or password.")
+
             
     def register_user(self):
         username = self.username_entry.get()
@@ -139,10 +142,11 @@ class LoginPage(tk.Tk):
             dest_dialog = CustomDirectoryDialog(self, os.getcwd())
             self.wait_window(dest_dialog)
             automation_folder = dest_dialog.selected_path
-            
+
             if automation_folder:
                 register_user(username, password, automation_folder)
             else:
                 messagebox.showinfo("Registration", "Registration cancelled, no automation folder selected.")
         else:
             register_user(username, password, None)
+

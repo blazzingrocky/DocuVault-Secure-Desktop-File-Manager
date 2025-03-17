@@ -2,12 +2,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 import os
 import shutil
-import time
 import sqlite3
-import bcrypt
 import subprocess
 from tkinter import ttk  # For the Treeview widget
-from utility import CustomDirectoryDialog, compare_path
+from utility import CustomDirectoryDialog, CustomFileDialog, compare_path
+import requests
+from database import log_action
+
 
 class AutomationWindow(tk.Toplevel):
     def __init__(self, parent, automation_folder, username):
@@ -33,10 +34,26 @@ class AutomationWindow(tk.Toplevel):
             self.current_dir = self.automation_folder
             self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
             self.create_widgets()
+
+            self.create_auto_folders()
+
             self.update_file_list()
 
 
     # In automation.py - modify the set_automation_folder method
+
+    def create_auto_folders(self):
+        self.folders = ["txt", "image"]
+        for folder in self.folders:
+            os.makedirs(os.path.join(self.automation_folder, folder), exist_ok=True)
+        self.subfolders = {
+            "txt": ["legal", "literary", "technical"],
+            "image": ["food", "nature", "human", "tech", "buildings"]
+        }
+        for folder, subfolders in self.subfolders.items():
+            for subfolder in subfolders:
+                os.makedirs(os.path.join(self.automation_folder, folder, subfolder), exist_ok=True)
+   
     def set_automation_folder(self):
         dest_dialog = CustomDirectoryDialog(self.parent, os.path.expanduser("~"))
         self.parent.wait_window(dest_dialog)  # Wait for dialog to close
@@ -45,6 +62,8 @@ class AutomationWindow(tk.Toplevel):
             self.automation_folder = dest_dialog.selected_path
             # Update database
             conn = sqlite3.connect('docuvault.db')
+            conn.execute('PRAGMA foreign_keys = ON')
+
             cursor = conn.cursor()
             try:
                 cursor.execute(
@@ -68,6 +87,8 @@ class AutomationWindow(tk.Toplevel):
             self.current_dir = self.automation_folder
             self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
             self.create_widgets()
+            self.create_auto_folders()
+
             self.update_file_list()
        
         self.after(1000, self.update_file_list)  # Bring window to front after 1 second
@@ -96,7 +117,9 @@ class AutomationWindow(tk.Toplevel):
             ("Go Back", self.go_to_parent_directory),
             ("Go to Bin", self.go_to_bin),
             ("Restore", self.restore_item),
-            ("Search", self.search_files)
+            ("Search", self.search_files),
+            ("Upload to Auto", self.upload_to_auto)
+
         ]
 
 
@@ -106,6 +129,163 @@ class AutomationWindow(tk.Toplevel):
 
 
         self.search_results_window = None
+
+
+
+    def upload_to_auto(self):
+        file_dialog = CustomFileDialog(self.parent, self.current_dir)
+        self.parent.wait_window(file_dialog)
+        selected_path = file_dialog.selected_file
+        # selected_path = filedialog.askopenfilename(
+        #     initialdir=self.current_dir,
+        #     title="Select a file to upload"
+        # )
+        
+        if not selected_path:
+            return
+        
+        if not os.path.isfile(selected_path):
+            messagebox.showerror("Error", "Please select a file, not a directory")
+            return
+
+        # Create necessary directory structure
+        self.classify_and_move(selected_path)
+        self.update_file_list()
+
+    def classify_and_move(self, selected_path):
+
+        if self.automation_folder in selected_path:
+            messagebox.showinfo("Info", "File is already in the automation folder.")
+            return
+        try:
+            file_name = os.path.basename(selected_path)
+            file_ext = os.path.splitext(file_name)[1].lower()
+
+            dest_dir = self.automation_folder
+
+            # Text file processing
+            if file_ext == '.txt':
+                # Verify AI service is running
+                dest_dir = os.path.join(dest_dir, 'txt')
+                category_map = {
+                    0: 'legal',
+                    1: 'literary',
+                    2: 'technical'
+                }
+                try:
+                    requests.get('http://localhost:8000/docs', timeout=2)
+                except requests.ConnectionError:
+                    messagebox.showerror(
+                        "AI Service Offline",
+                        "Text classification unavailable\n"
+                        "Start file_auto_txt.py first"
+                    )
+                    return
+
+                # Get AI classification
+                with open(selected_path, 'rb') as f:
+                    files = {'file': f}
+                    response = requests.post(
+                        'http://localhost:8000/predict_txt',
+                        files=files,
+                        timeout=5
+                    )
+                    response.raise_for_status()
+                    category_idx = response.json()['category']
+                    category_name = category_map.get(category_idx, 'unknown')
+                    dest_dir = os.path.join(dest_dir, category_name)
+
+            # Image file processing
+            elif file_ext in ('.jpg', '.jpeg', '.png'):
+                dest_dir = os.path.join(dest_dir, 'image')
+                category_map = {
+                    0: 'buildings',
+                    1: 'food',
+                    2: 'human',
+                    3: 'nature',
+                    4: 'tech'
+                }
+
+                try:
+                    requests.get('http://localhost:8001/docs', timeout=2)
+                except requests.ConnectionError:
+                    messagebox.showerror(
+                        "AI Service Offline",
+                        "Text classification unavailable\n"
+                        "Start file_auto_txt.py first"
+                    )
+                    return
+
+                # Get AI classification
+                with open(selected_path, 'rb') as f:
+                    files = {'file': f}
+                    response = requests.post(
+                        'http://localhost:8001/predict_img',
+                        files=files,
+                        timeout=5
+                    )
+                    response.raise_for_status()
+                    category_idx = response.json()['category']
+                    category_name = category_map.get(category_idx, 'unknown')
+                    dest_dir = os.path.join(dest_dir, category_name)
+            
+            else:
+                messagebox.showerror(
+                    "Unsupported Format",
+                    f"Cannot process {file_ext} files\n"
+                    "Supported formats: .txt, .jpg, .png"
+                )
+                return
+
+            # Ensure destination directory exists
+            os.makedirs(dest_dir, exist_ok=True)
+            
+            # Generate unique filename
+            base_name = os.path.splitext(file_name)[0]
+            final_name = file_name
+            counter = 1
+            
+            while os.path.exists(os.path.join(dest_dir, final_name)):
+                final_name = f"{base_name}_{counter}{file_ext}"
+                counter += 1
+            
+            dest_path = os.path.join(dest_dir, final_name)
+            
+            # Perform the file move
+            shutil.move(selected_path, dest_path)
+            log_action(self.username, 'AUTO_UPLOAD', 'FILE', f"{selected_path} → {dest_path}", f"classified as {category_name}")
+            
+            # Prepare success message
+            success_msg = (f"Moved to: {os.path.relpath(dest_path, self.automation_folder)}\n"
+                        f"Location: {dest_path}")
+            
+            # if file_ext == '.txt':
+            success_msg = (f"Classified as {category_name}\n" + success_msg)
+
+            # elif file_ext == '.jpeg' or file_ext == '.jpg' or file_ext == '.png':
+
+                
+            messagebox.showinfo("Success", success_msg)
+            
+            # Refresh if in automation directory
+            if compare_path(self.current_dir, self.automation_folder):
+                self.update_file_list()
+
+        except requests.HTTPError as e:
+            messagebox.showerror(
+                "Classification Error",
+                f"API returned error: {e.response.text}"
+            )
+        except requests.Timeout:
+            messagebox.showerror(
+                "AI Timeout",
+                "Classification service took too long to respond"
+            )
+        except Exception as e:
+            messagebox.showerror(
+                "Processing Error",
+                f"Failed to handle file: {str(e)}"
+            )
 
 
     def return_auto_folder(self):

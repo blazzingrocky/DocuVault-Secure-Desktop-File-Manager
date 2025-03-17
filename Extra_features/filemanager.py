@@ -11,6 +11,9 @@ from tkinter import ttk  # For the Treeview widget
 from tkinter import Menu
 from automation import AutomationWindow
 from utility import CustomDirectoryDialog, compare_path
+
+from database import log_action, get_user_logs
+
 from cloud import CloudManager
 
 class Tooltip:
@@ -45,10 +48,33 @@ def remove_readonly(func, path, _):
         os.chmod(path, stat.S_IWRITE)  # Remove read-only flag
         func(path)
 
+
+class LogViewer(tk.Toplevel):
+    def __init__(self, parent, username):
+        super().__init__(parent)
+        self.title("Activity Logs")
+        self.tree = ttk.Treeview(self, columns=('Time', 'Action', 'Type', 'Path', 'Details'))
+        
+        # Configure columns
+        self.tree.heading('#0', text='ID')
+        self.tree.column('#0', width=50)
+        for col in ('Time', 'Action', 'Type', 'Path', 'Details'):
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=150)
+            
+        # Populate logs
+        logs = get_user_logs(username)
+        for log in logs:
+            self.tree.insert('', 'end', values=log)
+            
+        self.tree.pack(expand=True, fill='both')
+
+
 class FileManagerGUI:
     def __init__(self, username):
         self.root = tk.Tk()
         self.root.title("DocuVault: Secure Desktop File Manager")
+
         self.root.geometry("800x400")
         # Set application icon
         try:
@@ -73,6 +99,7 @@ class FileManagerGUI:
         self.automation_folder = self.get_automation_folder(username)
         self.create_widgets()
         self.update_file_list()
+
         # Delay cloud initialization until the window is mapped.
         self.root.after(100, self.initialize_cloud)
 
@@ -83,6 +110,8 @@ class FileManagerGUI:
 ####################################################################################################
 # Modern File Manager GUI widgets
     def create_widgets(self):
+        # self.log_button = tk.Button(self.root, text="Activity Log", command=self.show_activity_log)
+        # self.log_button.pack()
         # Apply a modern theme with ttk
         style = ttk.Style()
         try:
@@ -250,7 +279,7 @@ class FileManagerGUI:
             self.update_file_list()
         else:
             messagebox.showinfo("Info", "Desktop directory not found.")
-
+            
     def search_files(self):
         search_term = simpledialog.askstring("Search", "Enter search term:")
         if search_term:
@@ -271,6 +300,7 @@ class FileManagerGUI:
             self.search_tree.bind("<Button-3>", self.show_search_context_menu)
             self.search_tree.bind("<Button-2>", self.show_search_context_menu)  # For macOS
             self.search_tree.bind("<Double-1>", self.on_search_double_click)
+
 
             # Track if any local results were found
             self.local_results_found = False
@@ -339,6 +369,7 @@ class FileManagerGUI:
             
             if item_values:
                 item_path = item_values[0]
+
                 if not item_path:
                     return
                 context_menu = Menu(self.root, tearoff=0)
@@ -399,6 +430,7 @@ class FileManagerGUI:
             self.file_tree.delete(item)
         self.populate_tree(self.file_tree, self.current_dir)
         self.path_label.config(text=self.current_dir)
+
         # Update toolbar buttons whenever directory changes
         self.update_toolbar_buttons()
 
@@ -553,6 +585,9 @@ class FileManagerGUI:
                             elif item_type == 'folder':
                                 shutil.rmtree(new_path, onexc=remove_readonly)
                     os.rename(item_path, new_path)
+
+                    log_action(self.username, 'RENAME', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} → {new_path}")
+
                     self.update_file_list()
                 except Exception as e:
                     messagebox.showerror("Error", f"Could not rename item: {e}")
@@ -717,6 +752,9 @@ class FileManagerGUI:
         try:
             with open(os.path.join(self.current_dir, filename), 'w') as f:
                 pass
+
+            log_action(self.username, 'CREATE', 'FILE', file_path)
+
             self.update_file_list()
         except Exception as e:
             messagebox.showerror("Error", f"Could not create file: {e}")
@@ -746,12 +784,17 @@ class FileManagerGUI:
         
         try:
             os.makedirs(folder_path, exist_ok=True)
+
+            log_action(self.username, 'CREATE', 'FOLDER', folder_path)
+
             self.update_file_list()
         except Exception as e:
             messagebox.showerror("Error", f"Could not create folder: {e}")
 
     def delete_item(self):
         selection = self.file_tree.selection()
+
+
         if not selection:
             return
         
@@ -784,6 +827,7 @@ class FileManagerGUI:
                         # Clear local reference
                         self.automation_folder = None
                         messagebox.showinfo("Success", "Automation folder and contents permanently deleted")
+                        log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
                     except Exception as e:
                         messagebox.showerror("Error", f"Could not delete automation folder: {e}")
                     finally:
@@ -803,10 +847,12 @@ class FileManagerGUI:
                             os.remove(item_path)
                         elif item_type == 'folder':
                             shutil.rmtree(item_path, onexc=remove_readonly)
+                        log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
                     except Exception as e:
                         messagebox.showerror("Error", f"Could not delete item: {e}")
                 else:
                     shutil.move(item_path, self.bin_dir)
+                    log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
             else:
                 confirm = messagebox.askokcancel("Permanent Deletion",
                     "This will permanently delete the item!\n\nAre you absolutely sure?",
@@ -817,6 +863,7 @@ class FileManagerGUI:
                             os.remove(item_path)
                         elif item_type == 'folder':
                             shutil.rmtree(item_path, onexc=remove_readonly)
+                        log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
                     except Exception as e:
                         messagebox.showerror("Error", f"Could not delete item: {e}")
         else:
@@ -842,6 +889,7 @@ class FileManagerGUI:
                                 os.remove(item_path)
                             elif item_type == 'folder':
                                 shutil.rmtree(item_path, onexc=remove_readonly)
+                            log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
                             success_count += 1
                         except Exception as e:
                             failed_items.append(f"{os.path.basename(item_path)}: {str(e)}")
@@ -874,12 +922,15 @@ class FileManagerGUI:
                             continue                        
                         try:
                             if response:  # Permanent delete
+
                                 if item_type == 'file':
                                     os.remove(item_path)
                                 elif item_type == 'folder':
                                     shutil.rmtree(item_path, onexc=remove_readonly)
+                                log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
                             else:  # Move to bin
                                 shutil.move(item_path, self.bin_dir)
+                                log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
                             success_count += 1
                         except Exception as e:
                             failed_items.append(f"{os.path.basename(item_path)}: {str(e)}")
@@ -966,6 +1017,7 @@ class FileManagerGUI:
                         
                         # Perform the move
                         shutil.move(item_path, dest)
+                        log_action(self.username, 'MOVE', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} → {dest}")
                         success_count += 1
                         
                     except Exception as e:
@@ -988,8 +1040,6 @@ class FileManagerGUI:
                 messagebox.showinfo("Success", f"Successfully moved {success_count} items to {os.path.basename(dest)}")
             
             self.update_file_list()
-
-
 
     def copy_item(self):
         selection = self.file_tree.selection()
@@ -1087,10 +1137,12 @@ class FileManagerGUI:
                                 shutil.rmtree(dest_path, onexc=remove_readonly)
                         
                         # Perform the copy
+
                         if item_type == 'file':
                             shutil.copy2(item_path, dest)
                         elif item_type == 'folder':
                             shutil.copytree(item_path, dest_path)
+                        log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} copy→ {dest}")
                         
                         success_count += 1
                         
@@ -1105,8 +1157,7 @@ class FileManagerGUI:
             if failed_items:
                 messagebox.showerror("Error", f"Copied {success_count}/{selection_count} items.\n\nFailed items:\n" + "\n".join(failed_items))
             elif success_count > 0:
-                messagebox.showinfo("Success", f"Successfully copied {success_count} items to {os.path.basename(dest)}")
-            
+                messagebox.showinfo("Success", f"Successfully copied {success_count} items to {os.path.basename(dest)}") 
             self.update_file_list()
 
 
@@ -1121,9 +1172,11 @@ class FileManagerGUI:
         else:
             messagebox.showinfo("Home Directory", "You are already at the home directory.")
 
+
     def go_to_bin(self):
         self.current_dir = self.bin_dir
         self.update_file_list()
+
 
     def empty_bin(self):
         """Empty all items from the DocuVault bin permanently"""
@@ -1160,6 +1213,7 @@ class FileManagerGUI:
                         os.remove(item_path)
                     elif os.path.isdir(item_path):
                         shutil.rmtree(item_path, onexc=remove_readonly)
+                    log_action(self.username, 'DELETE', 'FILE' if item_type=='file' else 'FOLDER', f"{item_path}", "Empty Bin")
                 except Exception as e:
                     messagebox.showerror("Error", f"Could not delete {item}: {e}")                    
             messagebox.showinfo("Success", "Bin has been emptied.")
@@ -1234,6 +1288,7 @@ class FileManagerGUI:
                         
                         # Perform restore operation
                         shutil.move(item_path, dest)
+                        log_action(self.username, 'RESTORE', 'FILE' if item_type=='file' else 'FOLDER', f"{item_path} → {dest}")
                         success_count += 1
                         
                     except Exception as e:
@@ -1252,8 +1307,6 @@ class FileManagerGUI:
             # Update file list and restore original directory
             self.update_file_list()
             self.current_dir = self.bin_dir  # Stay in bin after restore
-
-
 
     def run(self):
         self.root.mainloop()
@@ -1294,6 +1347,10 @@ class FileManagerGUI:
             return result[0]
         else:
             return None
+
+        
+    def show_activity_log(self):
+        LogViewer(self.root, self.username)
 
     ##############################
     # Cloud Operations Callbacks #
@@ -1514,3 +1571,4 @@ class FileManagerGUI:
         elif status == 'failed':
             self.cloud_status.config(text="💭❌", foreground="red")
             self.connect_cloud_button.config(text="Reconnect")
+
