@@ -9,6 +9,7 @@ from utility import CustomDirectoryDialog, CustomFileDialog, compare_path
 import requests
 from database import log_action
 
+
 class AutomationWindow(tk.Toplevel):
     def __init__(self, parent, automation_folder, username):
         super().__init__(parent)
@@ -33,11 +34,14 @@ class AutomationWindow(tk.Toplevel):
             self.current_dir = self.automation_folder
             self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
             self.create_widgets()
+
             self.create_auto_folders()
+
             self.update_file_list()
 
 
     # In automation.py - modify the set_automation_folder method
+
     def create_auto_folders(self):
         self.folders = ["txt", "image"]
         for folder in self.folders:
@@ -49,8 +53,7 @@ class AutomationWindow(tk.Toplevel):
         for folder, subfolders in self.subfolders.items():
             for subfolder in subfolders:
                 os.makedirs(os.path.join(self.automation_folder, folder, subfolder), exist_ok=True)
-        
-
+   
     def set_automation_folder(self):
         dest_dialog = CustomDirectoryDialog(self.parent, os.path.expanduser("~"))
         self.parent.wait_window(dest_dialog)  # Wait for dialog to close
@@ -60,6 +63,7 @@ class AutomationWindow(tk.Toplevel):
             # Update database
             conn = sqlite3.connect('docuvault.db')
             conn.execute('PRAGMA foreign_keys = ON')
+
             cursor = conn.cursor()
             try:
                 cursor.execute(
@@ -84,6 +88,7 @@ class AutomationWindow(tk.Toplevel):
             self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
             self.create_widgets()
             self.create_auto_folders()
+
             self.update_file_list()
        
         self.after(1000, self.update_file_list)  # Bring window to front after 1 second
@@ -113,7 +118,8 @@ class AutomationWindow(tk.Toplevel):
             ("Go to Bin", self.go_to_bin),
             ("Restore", self.restore_item),
             ("Search", self.search_files),
-            ("Upload to Auto", self.upload_to_auto),
+            ("Upload to Auto", self.upload_to_auto)
+
         ]
 
 
@@ -123,6 +129,7 @@ class AutomationWindow(tk.Toplevel):
 
 
         self.search_results_window = None
+
 
 
     def upload_to_auto(self):
@@ -279,6 +286,7 @@ class AutomationWindow(tk.Toplevel):
                 "Processing Error",
                 f"Failed to handle file: {str(e)}"
             )
+
 
     def return_auto_folder(self):
         return self.automation_folder

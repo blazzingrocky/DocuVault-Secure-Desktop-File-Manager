@@ -1,4 +1,5 @@
 
+
 from tkinter import filedialog, messagebox, simpledialog
 import sqlite3
 import bcrypt
@@ -69,6 +70,7 @@ def register_user(username, password, automation_folder):
 
 def login_user(username, password):
     conn = get_db_connection()
+
     cursor = conn.cursor()
     cursor.execute('SELECT password FROM users WHERE username = ?', (username,))
     result = cursor.fetchone()

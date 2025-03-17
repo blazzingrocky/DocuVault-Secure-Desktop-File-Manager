@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk
 import os
 from tkinter import messagebox
+import time
+
 
 def compare_path(st, pt):
     l1 = st.split('\\')
@@ -16,6 +18,12 @@ class CustomDirectoryDialog(tk.Toplevel):
         super().__init__(parent)
         self.title("Select Destination Folder")
         self.geometry("600x400")
+
+        # Set application icon
+        try:
+            self.iconbitmap("AppIcon\\DocuVault-icon.ico")
+        except Exception as e:
+            pass
         self.selected_path = None
         self.temp_selection = None
         self.current_dir = current_dir
@@ -38,13 +46,14 @@ class CustomDirectoryDialog(tk.Toplevel):
         
         # Navigation buttons
         btn_frame = tk.Frame(self)
-        btn_frame.pack(pady=5)
+
+        btn_frame.pack(fill = tk.X, pady=5)
         
-        tk.Button(btn_frame, text="Select", command=self.on_select).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Cancel", command=self.destroy).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", command=self.destroy).pack(side=tk.RIGHT, padx=5)
+        tk.Button(btn_frame, text="Select", command=self.on_select).pack(side=tk.RIGHT, padx=5)
         tk.Button(btn_frame, text="↩ Back", command=self.go_back).pack(side=tk.LEFT, padx=5)
         tk.Button(btn_frame, text="🏠 Home", command=lambda: self.navigate_to_special(os.path.expanduser("~"))).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="📁 Desktop", command=lambda: self.navigate_to_special(os.path.join(os.path.expanduser("~"), "OneDrive\\Desktop"))).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="💻 Desktop", command=lambda: self.navigate_to_special(os.path.join(os.path.expanduser("~"), "OneDrive\\Desktop"))).pack(side=tk.LEFT, padx=5)
         
         # Initial population with depth control
         # Single-click selection binding
@@ -146,11 +155,15 @@ class CustomDirectoryDialog(tk.Toplevel):
 
     def go_back(self):
         """Fixed back navigation"""
-        parent_dir = os.path.dirname(self.current_dir)
-        if os.path.exists(parent_dir):
-            self.current_dir = parent_dir
-            self.path_label.config(text=self.current_dir)
-            self.populate_tree(self.current_dir)
+
+        if self.current_dir != os.path.expanduser("~"):
+            parent_dir = os.path.dirname(self.current_dir)
+            if os.path.exists(parent_dir):
+                self.current_dir = parent_dir
+                self.path_label.config(text=self.current_dir)
+                self.populate_tree(self.current_dir)
+        else:
+            messagebox.showinfo("Home Directory", "You are already at the home directory.")
 
     def on_select(self):
         """Handle selection with single-click preference"""
@@ -171,6 +184,7 @@ class CustomDirectoryDialog(tk.Toplevel):
                 f"Directory not found:\n{path}")
     # def is_there_file(self, path):
     #     return os.path.isfile(path)
+
 
 class CustomFileDialog(tk.Toplevel):
     def __init__(self, parent, initial_dir):
@@ -344,6 +358,7 @@ class CustomFileDialog(tk.Toplevel):
     def update_file_list(self):
         """Refresh the tree view"""
         self.populate_tree(self.file_tree, self.current_dir)
+
 
 
 
