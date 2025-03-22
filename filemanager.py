@@ -3,15 +3,33 @@ from tkinter import filedialog, messagebox, simpledialog
 import os
 import stat
 import shutil
+
+import time
+import sqlite3
+import bcrypt
+import subprocess
+import schedule
+import json
+import watchdog.events
+import watchdog.observers
+import threading
 import sqlite3
 import subprocess
+
 from tkinter import ttk  # For the Treeview widget
 from tkinter import Menu
 from automation import AutomationWindow
 from utility import CustomDirectoryDialog, compare_path
+
+
+from database import log_action, get_user_logs
+
+from cloud import CloudManager
+
 from database import log_action, get_user_logs
 from cloud import CloudManager
 from datetime import datetime
+
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -66,11 +84,20 @@ class LogViewer(tk.Toplevel):
             
         self.tree.pack(expand=True, fill='both')
 
+class FileChangeHandler(watchdog.events.FileSystemEventHandler):
+    def __init__(self, callback):
+        self.callback = callback
+
+    def on_modified(self, event):
+        if not event.is_directory:
+            self.callback(event.src_path)
+
+
 
 class FileManagerGUI:
     def __init__(self, username):
         self.root = tk.Tk()
-        # self.root.iconbitmap("AppIcon\\DocuVault-icon.ico")
+
         self.root.title("DocuVault: Secure Desktop File Manager")
         self.root.geometry("800x400")
         self.sort_by = "name"  # Default sorting criterion
@@ -81,6 +108,10 @@ class FileManagerGUI:
             pass
         self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
         os.makedirs(self.bin_dir, exist_ok=True)
+
+        self.archive_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Archive')
+        os.makedirs(self.archive_dir, exist_ok=True)
+
         self.search_results_window = None
         
         self.cloud = None  # Placeholder for cloud manager
@@ -95,17 +126,80 @@ class FileManagerGUI:
         self.original_dir = self.current_dir
         self.username = username
         self.automation_folder = self.get_automation_folder(username)
+
+        schedule.every().day.at("02:00").do(self.archive_old_files)
+        schedule.every().day.at("03:00").do(self.backup_frequent_files)  # Add this line
+        self.scheduler_thread = threading.Thread(target=self.run_scheduler)
+        self.scheduler_thread.daemon = True
+        self.scheduler_thread.start()
+        # self.shared_files = {}
+        # self.start_file_watcher()
+
+
         self.create_widgets()
         self.update_file_list()
 
         # Delay cloud initialization until the window is mapped.
         self.root.after(100, self.initialize_cloud)
 
+    def run_scheduler(self):
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
+
     def initialize_cloud(self):
         self.cloud = CloudManager(self.username, gui_callback=self)
         self.update_cloud_status('disconnected')
 
+    # def share_file(self, file_path):
+    #     share_window = tk.Toplevel(self.root)
+    #     share_window.title("Share File")
+        
+    #     user_label = tk.Label(share_window, text="Share with (username):")
+    #     user_label.pack()
+    #     user_entry = tk.Entry(share_window)
+    #     user_entry.pack()
+        
+    #     permission_var = tk.StringVar(value="read")
+    #     permission_radio1 = tk.Radiobutton(share_window, text="Read", variable=permission_var, value="read")
+    #     permission_radio2 = tk.Radiobutton(share_window, text="Edit", variable=permission_var, value="edit")
+    #     permission_radio1.pack()
+    #     permission_radio2.pack()
+    
+    #     def apply_share():
+    #         shared_with = user_entry.get()
+    #         permission = permission_var.get()
+    #         self.update_shared_file_db(file_path, shared_with, permission)
+    #         share_window.destroy()
+    
+    #     apply_button = tk.Button(share_window, text="Share", command=apply_share)
+    #     apply_button.pack()
+    # def update_shared_file_db(self, file_path, shared_with, permission):
+    #     conn = sqlite3.connect('docuvault.db')
+    #     cursor = conn.cursor()
+    #     cursor.execute('''
+    #         INSERT OR REPLACE INTO shared_files 
+    #         (file_path, owner, shared_with, permissions, last_modified)
+    #         VALUES (?, ?, ?, ?, ?)
+    #     ''', (file_path, self.username, shared_with, permission, time.time()))
+    #     conn.commit()
+    #     conn.close()
+
+    # def start_file_watcher(self):
+    #     self.observer = watchdog.observers.Observer()
+    #     handler = FileChangeHandler(self.on_file_changed)
+    #     self.observer.schedule(handler, self.current_dir, recursive=True)
+    #     self.observer.start()
+
+    # def on_file_changed(self, file_path):
+    #     if file_path in self.shared_files:
+    #         self.sync_file(file_path)
 ####################################################################################################
+# Modern File Manager GUI widgets
+    def create_widgets(self):
+        # self.log_button = tk.Button(self.root, text="Activity Log", command=self.show_activity_log)
+        # self.log_button.pack()
+
 # Modern File Manager GUI widgets
     def create_widgets(self):
         # Apply a modern theme with ttk
@@ -191,6 +285,7 @@ class FileManagerGUI:
         
         new_btn.config(command=show_new_menu)
 
+
         # Create Sort button with dropdown
         sort_btn = ttk.Button(left_section, text="Sort 🔽")
         sort_btn.pack(side=tk.LEFT, padx=2)
@@ -236,6 +331,7 @@ class FileManagerGUI:
         right_section = ttk.Frame(toolbar_frame)
         right_section.pack(side=tk.RIGHT)
 
+
         # Add Settings button - place it before the other buttons
         self.settings_button = ttk.Button(right_section, text="⚙️ Settings", 
                                         command=self.show_settings_dialog)
@@ -244,6 +340,7 @@ class FileManagerGUI:
         # Activity Log button - Added here with consistent styling and an appropriate icon
         self.log_button = ttk.Button(right_section, text="📋 Activity Log", command=self.show_activity_log)
         self.log_button.pack(side=tk.RIGHT, padx=2)
+
         
         # Automation window button
         self.automation_button = ttk.Button(right_section, text="⚙️ Automation", 
@@ -275,6 +372,25 @@ class FileManagerGUI:
         self.file_tree.bind("<Button-3>", self.show_context_menu)
         self.file_tree.bind("<ButtonRelease-1>", self.deselect_on_empty_space, add="+")
         
+
+    def archive_old_files(self, archive_age=30):
+        current_time = time.time()
+        for root, _, files in os.walk(self.current_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                list_of_extensions=['txt','pdf','jgp','jpej','png','docx','xlsx','pptx','mp4','mp3','wav','avi','mkv','mov','flv','wmv']
+                if current_time - os.path.getmtime(file_path) > archive_age*24*3600 and any(file_path.split('.')[-1] for each in list_of_extensions):
+                    confirm=messagebox.askyesno("Archive Old Files", f"{file_path} has not been used for 30 days.\n\nDo you want to Archive?")
+                    if confirm: 
+                        print("Hello World")
+                        archive_dest = os.path.join(self.archive_dir, file)
+                        shutil.move(file_path, archive_dest)
+                        log_action(self.username, 'ARCHIVE', 'FILE', f"{file_path} → {archive_dest}")
+                    else:
+                        os.path.getmtime(file_path)==current_time
+                        return
+        self.update_file_list()
+
     def show_settings_dialog(self):
         """Open a dialog with user settings including account deletion option"""
         settings_window = tk.Toplevel(self.root)
@@ -369,7 +485,6 @@ class FileManagerGUI:
             from login import LoginPage
             login_page = LoginPage()
             login_page.mainloop()
-
     def update_toolbar_buttons(self):
         # Clear all existing buttons from center section
         for widget in self.center_section.winfo_children():
@@ -382,12 +497,22 @@ class FileManagerGUI:
                 ("♻️ Restore", self.restore_item),
                 ("🗑 Empty Bin", self.empty_bin)
             ]
+
+        elif self.current_dir == self.archive_dir:
+            operations = [
+                ("Delete", self.delete_item),
+                ("Move", self.move_item),
+                ("🗑 Empty Archive", self.empty_archive)
+            ]
+
         else:
             operations = [
                 ("Move", self.move_item),
                 ("Copy", self.copy_item),
                 ("Delete", self.delete_item),
-                ("🗑 Open Bin", self.go_to_bin)
+
+                ("🗑 Open Bin", self.go_to_bin),
+                ("📦Open Archive", self.go_to_archive)
             ]
         
         for text, command in operations:
@@ -456,7 +581,78 @@ class FileManagerGUI:
             # Bring search window back to focus after dialog
             self.search_results_window.lift()
             self.search_results_window.focus_set()
+    def update_file_access(self, file_path):
+        """Track file access time for determining frequently accessed files"""
+        current_time = time.time()
+        try:
+            with open('file_access_log.json', 'r+') as f:
+                try:
+                    log = json.load(f)
+                except json.JSONDecodeError:
+                    # File is empty or invalid JSON
+                    log = {}
+                
+                log[file_path] = current_time
+                f.seek(0)
+                f.truncate()
+                json.dump(log, f)
+        except FileNotFoundError:
+            # If the file doesn't exist, create it
+            with open('file_access_log.json', 'w') as f:
+                json.dump({file_path: current_time}, f)
 
+    def get_frequently_accessed_files(self, threshold=1):
+        """Get list of files accessed within the threshold period (days)"""
+        current_time = time.time()
+        try:
+            with open('file_access_log.json', 'r') as f:
+                try:
+                    log = json.load(f)
+                    return [file for file, access_time in log.items() 
+                            if current_time - access_time <= threshold * 3600
+                            and os.path.exists(file)]
+                except json.JSONDecodeError:
+                    return []
+        except FileNotFoundError:
+            return []
+
+    def backup_frequent_files(self, destination_dir=None):
+        """Backup frequently accessed files to cloud storage"""
+        frequent_files = self.get_frequently_accessed_files()
+        
+        # Silent cloud connection for scheduled tasks
+        if not self.cloud or not self.cloud.nc:
+            if self.cloud:
+                self.cloud._load_credentials()
+                
+            if not self.cloud or not self.cloud.nc:
+                log_action(self.username, 'ERROR', 'SYSTEM', 
+                        "Cloud backup failed: No connection")
+                return
+        
+        if not frequent_files:
+            log_action(self.username, 'BACKUP', 'SYSTEM', 
+                    "No frequently accessed files to backup")
+            return
+            
+        # Create backup directory in cloud
+        try:
+            self.cloud.nc.files.mkdir("/DocuVault/Backup")
+        except:
+            # Directory might already exist
+            pass
+            
+        # Upload each file to cloud
+        for file_path in frequent_files:
+            if os.path.isfile(file_path):
+                try:
+                    remote_path = f"/DocuVault/Backup/{os.path.basename(file_path)}"
+                    self.cloud.upload_file(file_path, remote_path)
+                    log_action(self.username, 'BACKUP', 'FILE', 
+                            f"{file_path} → Cloud:{remote_path}")
+                except Exception as e:
+                    log_action(self.username, 'ERROR', 'FILE', 
+                            f"Backup failed for {file_path}: {str(e)}")
     def recursive_search(self, start_dir, search_term, parent=""):
         try:
             items = os.listdir(start_dir)
@@ -585,6 +781,8 @@ class FileManagerGUI:
             except Exception as e:
                 messagebox.showerror("Error", f"Could not access directory: {e}")
                 return
+
+
             
             # Sort items based on the selected criteria
             if self.sort_by == "name":
@@ -593,6 +791,7 @@ class FileManagerGUI:
                 items = sorted(items, key=lambda item: os.path.getsize(os.path.join(directory, item)))
             elif self.sort_by == "date":
                 items = sorted(items, key=lambda item: os.path.getmtime(os.path.join(directory, item)))
+
 
             # Add parent directory entry
             if depth > 0:
@@ -681,8 +880,10 @@ class FileManagerGUI:
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
                     context_menu.add_command(label="Upload to Cloud", 
                                             command=lambda: self.upload_to_cloud(item_path))
-                context_menu.add_command(label="Metadata", command=self.show_metadata)  # New metadata option 
-                context_menu.tk_popup(event.x_root, event.y_root)
+
+                    context_menu.add_command(label="Share", command=lambda: self.share_file(item_path)
+                    context_menu.add_command(label="Metadata", command=self.show_metadata)  # New metadata option 
+                    context_menu.tk_popup(event.x_root, event.y_root)
         else:
             # Clicked on empty space
             context_menu = Menu(self.root, tearoff=0)
@@ -734,8 +935,6 @@ class FileManagerGUI:
             "Permissions": oct(stat.S_IMODE(os.stat(path).st_mode))
         }
         return metadata
-
-
     def deselect_on_empty_space(self, event):
         """Deselect all items when clicking on empty space"""
         # Get the item (row) that was clicked
@@ -881,6 +1080,7 @@ class FileManagerGUI:
         listbox.bind('<Double-1>', on_double_click)
 
 
+
     def open_file(self, item_path):
         if os.path.isfile(item_path):
             text_extensions = []
@@ -942,6 +1142,7 @@ class FileManagerGUI:
 
     def create_folder(self):
         foldername = simpledialog.askstring("Create Folder", "Enter folder name:")
+
         if 'Automation_Window' in foldername:
             messagebox.showerror("Error", "You cannot create folder with this name.")
             return
@@ -987,7 +1188,6 @@ class FileManagerGUI:
             item_values = self.file_tree.item(item_id, 'values')
             if not item_values:
                 return
-                
             item_type, item_path = item_values
 
             # Check if it's the other automation folder
@@ -1021,8 +1221,7 @@ class FileManagerGUI:
                         conn.close()
                     self.update_file_list()
                     return
-            
-            # Regular deletion process for non-automation single item
+         
             if "DocuVault_Bin" not in item_path:
                 confirm = messagebox.askyesnocancel("Confirm Move to Bin",
                     "Do you want to permanently delete this item?\n\n")
@@ -1038,8 +1237,30 @@ class FileManagerGUI:
                     except Exception as e:
                         messagebox.showerror("Error", f"Could not delete item: {e}")
                 else:
+
+                    base_name = os.path.basename(item_path)
+                    dest_path = os.path.join(self.bin_dir, base_name)
+    
+    # Handle name conflicts by appending a counter
+                    counter = 1
+                    while os.path.exists(dest_path):
+                                # Get file name and extension
+                        file_name, file_ext = os.path.splitext(base_name)
+                                # Create a new name with counter
+                        new_name = f"{file_name}_{counter}{file_ext}"
+                        dest_path = os.path.join(self.bin_dir, new_name)
+                        counter += 1
+                                
+                            # Now move with the potentially modified destination path
+                    shutil.move(item_path, dest_path)
+                        # elif item_type == 'folder':
+                        #     shutil.rmtree(item_path, onexc=remove_readonly)
+                        # log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
+                    log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', 
+                                    f"{item_path} → {dest_path}")
                     shutil.move(item_path, self.bin_dir)
                     log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
+
             else:
                 confirm = messagebox.askokcancel("Permanent Deletion",
                     "This will permanently delete the item!\n\nAre you absolutely sure?",
@@ -1115,9 +1336,29 @@ class FileManagerGUI:
                                 elif item_type == 'folder':
                                     shutil.rmtree(item_path, onexc=remove_readonly)
                                 log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
-                            else:  # Move to bin
-                                shutil.move(item_path, self.bin_dir)
-                                log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
+
+                            else:
+                                base_name = os.path.basename(item_path)
+                                dest_path = os.path.join(self.bin_dir, base_name)
+    
+    # Handle name conflicts by appending a counter
+                                counter = 1
+                                while os.path.exists(dest_path):
+                                # Get file name and extension
+                                    file_name, file_ext = os.path.splitext(base_name)
+                                # Create a new name with counter
+                                    new_name = f"{file_name}_{counter}{file_ext}"
+                                    dest_path = os.path.join(self.bin_dir, new_name)
+                                    counter += 1
+                                
+                            # Now move with the potentially modified destination path
+                                shutil.move(item_path, dest_path)
+                        # elif item_type == 'folder':
+                        #     shutil.rmtree(item_path, onexc=remove_readonly)
+                        # log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', item_path)
+                                log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', 
+                                    f"{item_path} → {dest_path}")  # Move to bin
+
                             success_count += 1
                         except Exception as e:
                             failed_items.append(f"{os.path.basename(item_path)}: {str(e)}")
@@ -1228,58 +1469,182 @@ class FileManagerGUI:
             
             self.update_file_list()
 
+
+    # def copy_item(self):
+    #     selection = self.file_tree.selection()
+    #     if not selection:
+    #         return
+            
+    #     # Show how many items are selected
+    #     selection_count = len(selection)
+        
+    #     # Create custom dialog
+    #     dest_dialog = CustomDirectoryDialog(self.root, self.current_dir)
+    #     self.root.wait_window(dest_dialog)  # Wait for dialog to close
+        
+    #     if dest_dialog.selected_path:
+    #         dest = dest_dialog.selected_path
+    #         dest_norm = os.path.normpath(dest)
+            
+    #         # Check if any items are being copied to their parent folder
+    #         same_parent_items = []
+    #         for item_id in selection:
+    #             item_values = self.file_tree.item(item_id, 'values')
+    #             if item_values:
+    #                 item_type, item_path = item_values
+    #                 item_parent = os.path.dirname(os.path.normpath(item_path))
+    #                 if item_parent == dest_norm:
+    #                     same_parent_items.append(os.path.basename(item_path))
+            
+    #         # If copying to same parent folder, ask if they want to create duplicates
+    #         if same_parent_items:
+    #             if len(same_parent_items) == 1:
+    #                 msg = f"'{same_parent_items[0]}' is already in this folder. Create a duplicate copy?"
+    #             else:
+    #                 msg = f"{len(same_parent_items)} items selected are already in this folder. Create duplicate copies?"
+                    
+    #             create_duplicates = messagebox.askyesno("Redundant Operation", msg)
+    #             if not create_duplicates:
+    #                 # Filter out items that are in the same parent folder
+    #                 filtered_selection = []
+    #                 for item_id in selection:
+    #                     item_values = self.file_tree.item(item_id, 'values')
+    #                     if item_values:
+    #                         item_type, item_path = item_values
+    #                         item_parent = os.path.dirname(os.path.normpath(item_path))
+    #                         if item_parent != dest_norm:
+    #                             filtered_selection.append(item_id)
+                    
+    #                 # Update selection
+    #                 if not filtered_selection:
+    #                     messagebox.showinfo("Operation Cancelled", "No items to copy.")
+    #                     return
+    #                 selection = filtered_selection
+    #                 selection_count = len(selection)
+            
+    #         # Track success and failure
+    #         success_count = 0
+    #         failed_items = []
+            
+    #         # Process each selected item
+    #         for item_id in selection:
+    #             item_values = self.file_tree.item(item_id, 'values')
+    #             if item_values:
+    #                 item_type, item_path = item_values
+                    
+    #                 try:
+    #                     base_name = os.path.basename(item_path)
+    #                     dest_path = os.path.join(dest, base_name)
+                        
+    #                     # Handle file conflicts
+    #                     if os.path.exists(dest_path):
+    #                         if selection_count == 1:
+    #                             # Single item - ask normally
+    #                             confirm = messagebox.askyesno("Confirm Overwrite",
+    #                                 f"'{base_name}' already exists in destination. Overwrite?")
+    #                             if not confirm:
+    #                                 continue
+    #                         else:
+    #                             # Multiple items - ask once with option to apply to all
+    #                             if not hasattr(self, '_overwrite_all'):
+    #                                 response = messagebox.askyesnocancel("Confirm Overwrite",
+    #                                     f"'{base_name}' already exists in destination.\n\nYes = Overwrite this and all conflicts\nNo = Skip this item\nCancel = Abort operation")
+    #                                 if response is None:  # Cancel
+    #                                     break
+    #                                 elif response:  # Yes
+    #                                     self._overwrite_all = True
+    #                                 else:  # No
+    #                                     self._overwrite_all = False
+    #                                     continue
+    #                             elif not self._overwrite_all:
+    #                                 continue
+                            
+    #                         # Remove existing destination
+    #                         if item_type == 'file':
+    #                             os.remove(dest_path)
+    #                         elif item_type == 'folder':
+    #                             shutil.rmtree(dest_path, onexc=remove_readonly)
+                        
+    #                     # Perform the copy
+
+    #                     if item_type == 'file':
+    #                         shutil.copy2(item_path, dest)
+    #                     elif item_type == 'folder':
+    #                         shutil.copytree(item_path, dest_path)
+    #                     log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} copy→ {dest}")
+                        
+    #                     success_count += 1
+                        
+    #                 except Exception as e:
+    #                     failed_items.append(f"{base_name}: {str(e)}")
+            
+    #         # Clean up temporary attribute
+    #         if hasattr(self, '_overwrite_all'):
+    #             delattr(self, '_overwrite_all')
+            
+    #         # Show results
+    #         if failed_items:
+    #             messagebox.showerror("Error", f"Copied {success_count}/{selection_count} items.\n\nFailed items:\n" + "\n".join(failed_items))
+    #         elif success_count > 0:
+    #             messagebox.showinfo("Success", f"Successfully copied {success_count} items to {os.path.basename(dest)}") 
+    #         self.update_file_list()
+
     def copy_item(self):
         selection = self.file_tree.selection()
         if not selection:
             return
-            
+
         # Show how many items are selected
         selection_count = len(selection)
-        
+
         # Create custom dialog
         dest_dialog = CustomDirectoryDialog(self.root, self.current_dir)
-        self.root.wait_window(dest_dialog)  # Wait for dialog to close
+        self.root.wait_window(dest_dialog) # Wait for dialog to close
+
         
         if dest_dialog.selected_path:
             dest = dest_dialog.selected_path
             dest_norm = os.path.normpath(dest)
             
-            # Check if any items are being copied to their parent folder
-            same_parent_items = []
-            for item_id in selection:
-                item_values = self.file_tree.item(item_id, 'values')
-                if item_values:
-                    item_type, item_path = item_values
-                    item_parent = os.path.dirname(os.path.normpath(item_path))
-                    if item_parent == dest_norm:
-                        same_parent_items.append(os.path.basename(item_path))
+# <<<<<<< sharanya
+# =======
+#             # Check if any items are being copied to their parent folder
+#             same_parent_items = []
+#             for item_id in selection:
+#                 item_values = self.file_tree.item(item_id, 'values')
+#                 if item_values:
+#                     item_type, item_path = item_values
+#                     item_parent = os.path.dirname(os.path.normpath(item_path))
+#                     if item_parent == dest_norm:
+#                         same_parent_items.append(os.path.basename(item_path))
             
-            # If copying to same parent folder, ask if they want to create duplicates
-            if same_parent_items:
-                if len(same_parent_items) == 1:
-                    msg = f"'{same_parent_items[0]}' is already in this folder. Create a duplicate copy?"
-                else:
-                    msg = f"{len(same_parent_items)} items selected are already in this folder. Create duplicate copies?"
+#             # If copying to same parent folder, ask if they want to create duplicates
+#             if same_parent_items:
+#                 if len(same_parent_items) == 1:
+#                     msg = f"'{same_parent_items[0]}' is already in this folder. Create a duplicate copy?"
+#                 else:
+#                     msg = f"{len(same_parent_items)} items selected are already in this folder. Create duplicate copies?"
                     
-                create_duplicates = messagebox.askyesno("Redundant Operation", msg)
-                if not create_duplicates:
-                    # Filter out items that are in the same parent folder
-                    filtered_selection = []
-                    for item_id in selection:
-                        item_values = self.file_tree.item(item_id, 'values')
-                        if item_values:
-                            item_type, item_path = item_values
-                            item_parent = os.path.dirname(os.path.normpath(item_path))
-                            if item_parent != dest_norm:
-                                filtered_selection.append(item_id)
+#                 create_duplicates = messagebox.askyesno("Redundant Operation", msg)
+#                 if not create_duplicates:
+#                     # Filter out items that are in the same parent folder
+#                     filtered_selection = []
+#                     for item_id in selection:
+#                         item_values = self.file_tree.item(item_id, 'values')
+#                         if item_values:
+#                             item_type, item_path = item_values
+#                             item_parent = os.path.dirname(os.path.normpath(item_path))
+#                             if item_parent != dest_norm:
+#                                 filtered_selection.append(item_id)
                     
-                    # Update selection
-                    if not filtered_selection:
-                        messagebox.showinfo("Operation Cancelled", "No items to copy.")
-                        return
-                    selection = filtered_selection
-                    selection_count = len(selection)
+#                     # Update selection
+#                     if not filtered_selection:
+#                         messagebox.showinfo("Operation Cancelled", "No items to copy.")
+#                         return
+#                     selection = filtered_selection
+#                     selection_count = len(selection)
             
+# >>>>>>> main
             # Track success and failure
             success_count = 0
             failed_items = []
@@ -1289,53 +1654,36 @@ class FileManagerGUI:
                 item_values = self.file_tree.item(item_id, 'values')
                 if item_values:
                     item_type, item_path = item_values
-                    
                     try:
                         base_name = os.path.basename(item_path)
-                        dest_path = os.path.join(dest, base_name)
-                        
-                        # Handle file conflicts
+                        dest_path = os.path.join(dest, base_name)                       
+                        # Handle name conflicts for all files (including same directory copies)
                         if os.path.exists(dest_path):
-                            if selection_count == 1:
-                                # Single item - ask normally
-                                confirm = messagebox.askyesno("Confirm Overwrite",
-                                    f"'{base_name}' already exists in destination. Overwrite?")
-                                if not confirm:
-                                    continue
-                            else:
-                                # Multiple items - ask once with option to apply to all
-                                if not hasattr(self, '_overwrite_all'):
-                                    response = messagebox.askyesnocancel("Confirm Overwrite",
-                                        f"'{base_name}' already exists in destination.\n\nYes = Overwrite this and all conflicts\nNo = Skip this item\nCancel = Abort operation")
-                                    if response is None:  # Cancel
-                                        break
-                                    elif response:  # Yes
-                                        self._overwrite_all = True
-                                    else:  # No
-                                        self._overwrite_all = False
-                                        continue
-                                elif not self._overwrite_all:
-                                    continue
-                            
-                            # Remove existing destination
-                            if item_type == 'file':
-                                os.remove(dest_path)
-                            elif item_type == 'folder':
-                                shutil.rmtree(dest_path, onexc=remove_readonly)
+                            # Generate unique name with counter
+                            file_name, file_ext = os.path.splitext(base_name)
+                            counter = 1
+                            while os.path.exists(dest_path):
+                                new_name = f"{file_name}_{counter}{file_ext}"
+                                dest_path = os.path.join(dest, new_name)
+                                counter += 1
                         
-                        # Perform the copy
-
+                        # Perform the copy with potentially modified destination path
                         if item_type == 'file':
-                            shutil.copy2(item_path, dest)
+                            shutil.copy2(item_path, dest_path)
                         elif item_type == 'folder':
                             shutil.copytree(item_path, dest_path)
-                        log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} copy→ {dest}")
                         
+                        log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', 
+                                f"{item_path} copy→ {dest_path}")
+
+                        # Handle file conflicts
+                       
                         success_count += 1
                         
                     except Exception as e:
                         failed_items.append(f"{base_name}: {str(e)}")
             
+
             # Clean up temporary attribute
             if hasattr(self, '_overwrite_all'):
                 delattr(self, '_overwrite_all')
@@ -1344,10 +1692,9 @@ class FileManagerGUI:
             if failed_items:
                 messagebox.showerror("Error", f"Copied {success_count}/{selection_count} items.\n\nFailed items:\n" + "\n".join(failed_items))
             elif success_count > 0:
-                messagebox.showinfo("Success", f"Successfully copied {success_count} items to {os.path.basename(dest)}") 
+
+                messagebox.showinfo("Success", f"Successfully copied {success_count} items to {os.path.basename(dest)}")
             self.update_file_list()
-
-
 
     def go_to_parent_directory(self):
         if self.current_dir == self.bin_dir:
@@ -1362,6 +1709,10 @@ class FileManagerGUI:
 
     def go_to_bin(self):
         self.current_dir = self.bin_dir
+        self.update_file_list()
+
+    def go_to_archive(self):
+        self.current_dir = self.archive_dir
         self.update_file_list()
 
 
@@ -1398,17 +1749,63 @@ class FileManagerGUI:
                 try:
                     if os.path.isfile(item_path):
                         os.remove(item_path)
-                        item_type = 'file'
+
+                        item_type="File"
                     elif os.path.isdir(item_path):
                         shutil.rmtree(item_path, onexc=remove_readonly)
-                        item_type = 'folder'
-                    log_action(self.username, 'DELETE', 'FILE' if item_type=='file' else 'FOLDER', f"{item_path}", "Empty Bin")
+                        file_type="Folder"
+                    log_action(self.username, 'DELETE', 'FILE' if item_type=='File' else 'FOLDER', f"{item_path}", "Empty Bin")
                 except Exception as e:
                     messagebox.showerror("Error", f"Could not delete {item}: {e}")                    
             messagebox.showinfo("Success", "Bin has been emptied.")
             self.update_file_list()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to empty Bin: {e}")
+
+    def empty_archive(self):
+        """Empty all items from the DocuVault bin permanently"""
+        # Check if we're in the bin directory
+        if self.current_dir != self.archive_dir:
+            messagebox.showinfo("Info", "You need to be in the Bin to empty it.")
+            return
+            
+        # Check if bin is empty
+        try:
+            items = os.listdir(self.archive_dir)
+            if not items:
+                messagebox.showinfo("Info", "The Archive is already empty.")
+                return
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not access Archive: {e}")
+            return
+            
+        # Confirm before permanently deleting
+        confirm = messagebox.askokcancel(
+            "Empty Archive",
+            "This will permanently delete all items in the Archive!\n\nAre you absolutely sure?",
+            icon=messagebox.WARNING
+        )        
+        if not confirm:
+            return
+            
+        # Empty the bin
+        try:
+            for item in os.listdir(self.archive_dir):
+                item_path = os.path.join(self.archive_dir, item)                
+                try:
+                    if os.path.isfile(item_path):
+                        os.remove(item_path)
+                        item_type="File"
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path, onexc=remove_readonly)
+                        file_type="Folder"
+                    log_action(self.username, 'DELETED from Archive', 'FILE' if item_type=='File' else 'FOLDER', f"{item_path}", "Empty Archive")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not delete {item}: {e}")                    
+            messagebox.showinfo("Success", "Archive has been emptied.")
+            self.update_file_list()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to empty Archive: {e}")
 
 
     def restore_item(self):
