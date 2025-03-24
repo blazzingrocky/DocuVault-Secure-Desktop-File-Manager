@@ -1,4 +1,5 @@
 import os
+import oschmod
 import stat
 import shutil
 import time
@@ -9,8 +10,27 @@ from tkinter import messagebox
 
 def remove_readonly(func, path, _):
     """Remove read-only attribute from file before operations"""
-    os.chmod(path, stat.S_IWRITE)  # Remove read-only flag
-    func(path)
+    try:
+        os.chmod(path, stat.S_IWRITE)  # Remove read-only flag
+        func(path)
+    except Exception as e:
+        print(f"Error removing read-only attribute: {e}")
+
+def restrict_access(path):
+    """Restrict all access permissions to the specified file or directory."""
+    try:
+        # Use oschmod instead of os.chmod for cross-platform compatibility
+        oschmod.set_mode(path, 0o000)  # No permissions for anyone
+    except Exception as e:
+        print(f"Error restricting access: {e}")
+
+def allow_access(path):
+    """Allow all access permissions to the specified file or directory."""
+    try:
+        # Use oschmod instead of os.chmod for cross-platform compatibility
+        oschmod.set_mode(path, 0o755)  # rwx for owner, rx for group and others
+    except Exception as e:
+        print(f"Error allowing access: {e}")
 
 class FileManager:
     def __init__(self, username, bin_dir):
@@ -198,7 +218,7 @@ class FileManager:
             confirm = messagebox.askyesno("Confirm Overwrite", 
                 f"'{filename}' already exists. Overwrite?")
             if not confirm:
-                return
+                return True, file_path
         
         try:
             with open(file_path, 'w') as f:
@@ -229,7 +249,7 @@ class FileManager:
             confirm = messagebox.askyesno("Confirm Overwrite", 
                 f"'{foldername}' already exists. Overwrite?")
             if not confirm:
-                return
+                return True, folder_path
             else:
                 shutil.rmtree(folder_path, onexc=remove_readonly)
             
@@ -260,13 +280,13 @@ class FileManager:
                 continue
             
             try:
-                if permanently or current_dir == self.bin_dir:
+                if permanently:
                     # Permanent deletion
                     if item_type == 'file':
                         os.remove(item_path)
                     elif item_type == 'folder':
                         shutil.rmtree(item_path, onexc=remove_readonly)
-                    log_action(self.username, 'DELETE', item_type.upper(), item_path)
+                    log_action(self.username, 'DELETE', item_type.upper(), item_path, "Permanent Deletion")
                 else:
                     # Move to bin
                     base_name = os.path.basename(item_path)
@@ -286,7 +306,7 @@ class FileManager:
                     shutil.move(item_path, dest_path)
                     # Log action
                     log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER', 
-                        f"{item_path} → {dest_path}")  # Move to bin
+                        f"{item_path} → {dest_path}", "Move to Bin")  # Move to bin
 
                 success_count += 1
                 
@@ -455,12 +475,11 @@ class FileManager:
     
     def restore_item(self, items, destination):
         """Restore files/folders from bin to destination"""
-        if destination == self.bin_dir:
+        if (os.path.basename(self.bin_dir) in os.path.normpath(destination).split(os.path.sep)):
             return {
                 "success": False,
-                "message": "Cannot restore items back to the Bin",
                 "success_count": 0,
-                "failed_items": [],
+                "failed_items": ["Cannot restore items back to the Bin"],
                 "total": len(items)
             }
         
