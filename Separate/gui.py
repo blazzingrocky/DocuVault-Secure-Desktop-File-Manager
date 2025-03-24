@@ -4,7 +4,7 @@ import os
 import sqlite3
 import time
 import subprocess
-from newfilemanager import FileManager
+from newfilemanager import FileManager, allow_access, restrict_access
 from automation import AutomationWindow
 from utility import CustomDirectoryDialog, compare_path
 from database import log_action, get_user_logs
@@ -62,12 +62,13 @@ class FileManagerGUI:
         self.root.geometry("800x400")
         
         try:
-            self.root.iconbitmap("AppIcon\\DocuVault-icon.ico")
+            self.root.iconbitmap(r"AppIcon\DocuVault-icon.ico")
         except Exception:
             pass
         
         self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
         os.makedirs(self.bin_dir, exist_ok=True)
+        restrict_access(self.bin_dir)
         
         self.search_results_window = None
         self.cloud = None
@@ -212,7 +213,7 @@ class FileManagerGUI:
         for widget in self.center_section.winfo_children():
             widget.destroy()
         
-        if self.current_dir == self.bin_dir:
+        if (os.path.basename(self.bin_dir) in os.path.normpath(self.current_dir).split(os.path.sep)):
             operations = [
                 ("Delete", self.delete_item),
                 ("♻️ Restore", self.restore_item),
@@ -236,11 +237,15 @@ class FileManagerGUI:
         return "break"
 
     def go_to_root(self):
+        if self.current_dir == self.bin_dir:
+            restrict_access(self.bin_dir)
         self.current_dir = os.path.expanduser('~')
         self.update_file_list()
 
     def go_to_desktop(self):
-        desktop_path = os.path.join(os.path.expanduser('~'), 'OneDrive\\Desktop')
+        if self.current_dir == self.bin_dir:
+            restrict_access(self.bin_dir)
+        desktop_path = os.path.join(os.path.expanduser('~'), r'OneDrive\Desktop')
         if os.path.exists(desktop_path):
             self.current_dir = desktop_path
             self.update_file_list()
@@ -463,12 +468,10 @@ class FileManagerGUI:
             if item_values:
                 item_type, item_path = item_values                
                 context_menu = Menu(self.root, tearoff=0)                
-                if self.current_dir == self.bin_dir:
-                    context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
-                    context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))
-                    context_menu.add_command(label="Rename", command=lambda: self.rename_item(item_path))
+                if (os.path.basename(self.bin_dir) in os.path.normpath(self.current_dir).split(os.path.sep)):
                     context_menu.add_command(label="Restore", command=lambda: self.restore_item())
                     context_menu.add_command(label="Delete", command=lambda: self.delete_item())
+                    context_menu.add_command(label="Empty Bin", command=lambda: self.empty_bin())
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
                 else:
                     context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
@@ -507,8 +510,16 @@ class FileManagerGUI:
 
     def go_into_directory(self, path):
         if os.path.isdir(path):
-            self.current_dir = path
-            self.update_file_list()
+            try:
+                # Attempt to list the contents of the directory
+                os.listdir(path)
+                # If successful, update current_dir and file list
+                self.current_dir = path
+                self.update_file_list()
+            except PermissionError:
+                messagebox.showwarning("Access Denied", f"Permission denied for directory:\n{path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not access directory: {str(e)}")
 
     def go_to_parent_directory(self):
         if self.current_dir == self.bin_dir:
@@ -521,6 +532,7 @@ class FileManagerGUI:
             messagebox.showinfo("Home Directory", "You are already at the home directory.")
 
     def go_to_bin(self):
+        allow_access(self.bin_dir)
         self.current_dir = self.bin_dir
         self.update_file_list()
 
@@ -561,12 +573,14 @@ class FileManagerGUI:
             messagebox.showinfo("Info", "No items selected")
             return
         
-        items_to_delete = [os.path.join(self.current_dir, self.file_tree.item(item)["text"]) for item in selected_items]
+        items_to_delete = [self.file_tree.item(item, 'values')[1] for item in selected_items]
         
-        if self.current_dir == self.bin_dir:
+        if (os.path.basename(self.bin_dir) in os.path.normpath(self.current_dir).split(os.path.sep)):
             confirm = messagebox.askyesno("Confirm Permanent Deletion", "Are you sure you want to permanently delete the selected items?")
             if confirm:
                 result = self.file_manager.delete_item(self.current_dir, items_to_delete, permanently=True)
+            else:
+                return
         else:
             response = messagebox.askyesnocancel("Delete Items",
                 f"What would you like to do with the selected item(s)?\n\nYes = Delete permanently\nNo = Move to Bin\nCancel = Abort operation")
@@ -578,7 +592,7 @@ class FileManagerGUI:
                 result = self.file_manager.delete_item(self.current_dir, items_to_delete)
         
         if result["success_count"] > 0:
-            self.update_file_list()
+            messagebox.showinfo("Success", f"Successfully deleted {result['success_count']} item(s)")
         
         if result["failed_items"]:
             failed_msg = "\n".join(result["failed_items"])
@@ -587,6 +601,7 @@ class FileManagerGUI:
         if result["skipped_items"]:
             skipped_msg = "\n".join(result["skipped_items"])
             messagebox.showinfo("Info", f"Skipped items:\n{skipped_msg}")
+        self.update_file_list()
 
     def move_item(self):
         selected_items = self.file_tree.selection()
@@ -594,7 +609,7 @@ class FileManagerGUI:
             messagebox.showinfo("Info", "No items selected")
             return
         
-        items_to_move = [os.path.join(self.current_dir, self.file_tree.item(item)["text"]) for item in selected_items]
+        items_to_move = [self.file_tree.item(item, 'values')[1] for item in selected_items]
         
         dest_dialog = CustomDirectoryDialog(self.root, self.current_dir)
         self.root.wait_window(dest_dialog)  # Wait for dialog to close
@@ -602,7 +617,7 @@ class FileManagerGUI:
         if destination:
             result = self.file_manager.move_item(items_to_move, destination)
             if result["success_count"] > 0:
-                self.update_file_list()
+                messagebox.showinfo("Success", f"Successfully moved {result['success_count']} item(s) to {result['destination']}")
             
             if result["failed_items"]:
                 failed_msg = "\n".join(result["failed_items"])
@@ -611,6 +626,7 @@ class FileManagerGUI:
             if result["skipped_items"]:
                 skipped_msg = "\n".join(result["skipped_items"])
                 messagebox.showinfo("Info", f"Skipped items:\n{skipped_msg}")
+        self.update_file_list()
     
     def copy_item(self):
         selected_items = self.file_tree.selection()
@@ -618,7 +634,7 @@ class FileManagerGUI:
             messagebox.showinfo("Info", "No items selected")
             return
         
-        items_to_copy = [os.path.join(self.current_dir, self.file_tree.item(item)["text"]) for item in selected_items]
+        items_to_copy = [self.file_tree.item(item, 'values')[1] for item in selected_items]
         
         dest_dialog = CustomDirectoryDialog(self.root, self.current_dir)
         self.root.wait_window(dest_dialog)  # Wait for dialog to close
@@ -639,13 +655,13 @@ class FileManagerGUI:
             result = self.file_manager.empty_bin()
             if isinstance(result, dict):
                 if result["success_count"] > 0:
-                    self.update_file_list()
                     messagebox.showinfo("Success", f"Successfully deleted {result['success_count']} item(s) from the Bin")
                 if result["failed_items"]:
                     failed_msg = "\n".join(result["failed_items"])
                     messagebox.showerror("Error", f"Failed to delete some items:\n{failed_msg}")
             else:
                 messagebox.showinfo("Info", result)
+        self.update_file_list()
 
     def restore_item(self):
         selected_items = self.file_tree.selection()
@@ -653,7 +669,7 @@ class FileManagerGUI:
             messagebox.showinfo("Info", "No items selected")
             return
         
-        items_to_restore = [os.path.join(self.current_dir, self.file_tree.item(item)["text"]) for item in selected_items]
+        items_to_restore = [self.file_tree.item(item, 'values')[1] for item in selected_items]
         
         dest_dialog = CustomDirectoryDialog(self.root, self.current_dir)
         self.root.wait_window(dest_dialog)
@@ -662,16 +678,18 @@ class FileManagerGUI:
         if destination:
             result = self.file_manager.restore_item(items_to_restore, destination)
             if result["success_count"] > 0:
-                self.update_file_list()
                 messagebox.showinfo("Success", f"Successfully restored {result['success_count']} item(s) to {result['destination']}")
             
             if result["failed_items"]:
                 failed_msg = "\n".join(result["failed_items"])
                 messagebox.showerror("Error", f"Failed to restore some items:\n{failed_msg}")
+        self.update_file_list()
 
     def open_file(self, item_path):
         if os.path.isfile(item_path):
-            self.file_manager.open_file(item_path)
+            success, message = self.file_manager.open_file(item_path)
+            if not success:
+                messagebox.showerror("Error", message)
         elif os.path.isdir(item_path):
             self.go_into_directory(item_path)
         else:
@@ -728,6 +746,7 @@ class FileManagerGUI:
         """Callback to update both instance variable and UI"""
         self.automation_folder = new_path
         self.update_file_list()  # Refresh display if in automation folder
+
     def open_automation_window(self):
         # Create automation window with proper parent relationship
         automation_win = AutomationWindow(self.root, self.automation_folder, self.username)
