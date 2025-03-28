@@ -5,15 +5,33 @@ import stat
 import shutil
 import sqlite3
 import subprocess
+
+import schedule
+import json
+import watchdog.events
+import watchdog.observers
+import threading
+import sqlite3
+import subprocess
+from PIL import Image, ImageTk
 from tkinter import ttk  # For the Treeview widget
 from tkinter import Menu
+from tkinter import BOTH
 from automation import AutomationWindow
 from utility import CustomDirectoryDialog, compare_path
 from database import log_action, get_user_logs
 from cloud import CloudManager
+
+
+from database import log_action, get_user_logs
+from cloud import CloudManager
+from datetime import datetime
+from PIL import Image, ImageTk
+
 from datetime import datetime, timedelta
 import time
 import requests
+
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -66,55 +84,221 @@ class LogViewer(tk.Toplevel):
             self.tree.insert('', 'end', values=log)
             
         self.tree.pack(expand=True, fill='both')
+class FileChangeHandler(watchdog.events.FileSystemEventHandler):
+    def __init__(self, callback):
+        self.callback = callback
+
+    def on_modified(self, event):
+        if not event.is_directory:
+            self.callback(event.src_path)
+class Dashboard:
+    def __init__(self, parent):
+        self.parent = parent
+        self.dashboard_window = tk.Toplevel(parent.root)
+        self.dashboard_window.title("DocuVault Dashboard")
+        self.dashboard_window.geometry("600x500")
+
+        icon_path = os.path.join("AppIcon", "Docu-icon.ico")
+        icon = Image.open(icon_path)
+        photo = ImageTk.PhotoImage(icon)
+        self.dashboard_window.iconphoto(False, photo)
+        # try:
+        #     self.dashboard_window.iconbitmap("AppIcon\\Docu-icon.ico")
+        # except Exception as e:
+        #     print(f"Error setting icon: {e}")
+
+        main_frame = ttk.Frame(self.dashboard_window, padding="10")
+        main_frame.pack(expand=True, fill="both")
+
+        # Welcome message
+        welcome_label = ttk.Label(main_frame, text=f"Hello, {self.parent.username},\nWelcome to DocuVault!", 
+                                  font=("Segoe UI", 14, "bold"), anchor="center", justify="center")
+        welcome_label.pack(fill="x", pady=(0, 15))
+
+        # Buttons for different locations
+        home_btn = ttk.Button(main_frame, text="Home", 
+                              command=lambda: self.go_to_directory(os.path.expanduser("~")))
+        home_btn.pack(pady=5)
+
+        desktop_btn = ttk.Button(main_frame, text="Desktop", 
+                                 command=lambda: self.go_to_directory(r"C:\Users\shara\OneDrive\Attachments\Desktop"))
+        desktop_btn.pack(pady=5)
+
+        cwd_btn = ttk.Button(main_frame, text="Current Working Directory", 
+                             command=lambda: self.go_to_directory(os.getcwd()))
+        cwd_btn.pack(pady=5)
+
+        self.update_file_counts(main_frame)
+
+        chart_btn = ttk.Button(main_frame, text="File Type Distribution Chart", command=self.show_file_type_chart)
+        chart_btn.pack(pady=10)
+    
+
+    def create_file_type_chart(file_types):
+        """
+        Create a pie chart using Matplotlib to display file type distribution.
+
+        Parameters:
+            file_types (dict): A dictionary where keys are file types (extensions) and values are their counts.
+
+        Returns:
+            None: Displays the pie chart.
+        """
+        # Extract data for the pie chart
+        labels = list(file_types.keys())
+        sizes = list(file_types.values())
+
+        # Create the pie chart
+        fig, ax = plt.subplots()
+        ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90)
+        ax.set_title("File Type Distribution")
+
+        # Display the chart
+        plt.show()
+
+    def show_file_type_chart(self):
+        """
+        Show the File Type Distribution Chart in a new window.
+        """
+        file_types = self.parent.count_files_by_type(self.parent.current_dir)
+        
+        # Convert counts to a dictionary for chart creation
+        file_types_dict = {
+            ".txt": file_types[0],
+            ".jpg": file_types[1],
+            ".pdf": file_types[2]
+            # Add more extensions as needed
+        }
+        
+        create_file_type_chart(file_types_dict)
+
+        # Display file counts
+        # self.create_visualization_buttons(main_frame)
+
+    def go_to_directory(self, path):
+        self.parent.initialize_main_window(path)
+        self.dashboard_window.destroy()
+
+    def update_file_counts(self, frame):
+        home_dir = os.path.expanduser("~")
+        text_count, image_count, video_count = self.parent.count_files_by_type(home_dir)
+
+        ttk.Label(frame, text=f"Text Files: {text_count}", font=("Segoe UI", 11)).pack(pady=5)
+        ttk.Label(frame, text=f"Image Files: {image_count}", font=("Segoe UI", 11)).pack(pady=5)
+        ttk.Label(frame, text=f"Video Files: {video_count}", font=("Segoe UI", 11)).pack(pady=5)
+    def create_visualization_buttons(self, frame):
+        button_frame = ttk.Frame(frame)
+        button_frame.pack(pady=10)
+
+        file_type_btn = ttk.Button(button_frame, text="File Type Distribution", 
+                                command=self.parent.create_file_type_chart)
+        file_type_btn.pack(side=tk.LEFT, padx=5)
+
+        # storage_trend_btn = ttk.Button(button_frame, text="Storage Usage Trend", 
+        #                             command=self.show_storage_trend_chart)
+        # storage_trend_btn.pack(side=tk.LEFT, padx=5)
+
+        # access_heatmap_btn = ttk.Button(button_frame, text="Last Accessed Heatmap", 
+        #                                 command=self.show_last_accessed_heatmap)
+        # access_heatmap_btn.pack(side=tk.LEFT, padx=5)
+
 
 
 class FileManagerGUI:
     def __init__(self, username):
         self.root = tk.Tk()
-        # self.root.iconbitmap("AppIcon\\DocuVault-icon.ico")
+        self.root.withdraw()  # Hide the main window initially
+        self.username = username
+        self.current_dir = os.getcwd()
+
+        self.sort_by = "name"
+        self.archive_mode = tk.BooleanVar(value=False)
+        self.archive_age = tk.IntVar(value=30)
+
+        self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
+        os.makedirs(self.bin_dir, exist_ok=True)
+        self.search_results_window = None
+        self.cloud = None  # Placeholder for cloud manager
+        self.progress_window = None
+
+        self.automation_folder = self.get_automation_folder(username)
+
+        #Initialize cloud
+        self.root.after(100, self.initialize_cloud)
+        self.create_widgets()
+
+        # Show dashboard immediately
+        self.show_dashboard()
+
+    def show_dashboard(self):
+        Dashboard(self)
+
+    def initialize_main_window(self, initial_dir):
+        self.current_dir = initial_dir
+        self.root.deiconify()  # Show the main window
         self.root.title("DocuVault: Secure Desktop File Manager")
         self.root.geometry("800x400")
-        self.sort_by = "name"  # Default sorting criterion
 
-        # Add inactivity timer variables
-        self.inactivity_timeout = 30 * 60 * 1000  # 30 minutes in milliseconds
-        self.last_activity_time = time.time() * 1000  # Current time in milliseconds
-        self.activity_timer_id = None
-
-        # Start the inactivity timer
-        self.reset_inactivity_timer()
-        
-        # Bind events to track user activity
-        self.root.bind("<Key>", self.user_activity)
-        self.root.bind("<Motion>", self.user_activity)
-        self.root.bind("<Button>", self.user_activity)
-
-        # Set application icon
         try:
             self.root.iconbitmap("AppIcon\\Docu-icon.ico")
         except Exception as e:
             pass
-        self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
-        os.makedirs(self.bin_dir, exist_ok=True)
-        self.search_results_window = None
-        
-        self.cloud = None  # Placeholder for cloud manager
-        self.progress_window = None
 
-        choice = messagebox.askyesno("Directory Choice", "Do you want to start in the current directory?")
-        if choice:
-            self.current_dir = os.getcwd()
-        else:
-            self.current_dir = os.path.expanduser('~')
-        
-        self.original_dir = self.current_dir
-        self.username = username
-        self.automation_folder = self.get_automation_folder(username)
-        self.create_widgets()
         self.update_file_list()
 
+        schedule.every().day.at("02:00").do(self.archive_old_files)
+        schedule.every().day.at("03:00").do(self.backup_frequent_files)
+
+        self.scheduler_thread = threading.Thread(target=self.run_scheduler)
+        self.scheduler_thread.daemon = True
+        self.scheduler_thread.start()
+
         # Delay cloud initialization until the window is mapped.
-        self.root.after(100, self.initialize_cloud)
+    def count_files_by_type(self, directory):
+        text_extensions = ['.txt', '.doc', '.docx', '.pdf', '.rtf', '.odt']
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff']
+        video_extensions = ['.mp4', '.avi', '.mkv', '.mov', '.flv', '.wmv']
+
+        text_count = image_count = video_count = 0
+
+        for root, _, files in os.walk(directory):
+            for file in files:
+                _, ext = os.path.splitext(file.lower())
+                if ext in text_extensions:
+                    text_count += 1
+                elif ext in image_extensions:
+                    image_count += 1
+                elif ext in video_extensions:
+                    video_count += 1
+
+        return text_count, image_count, video_count
+    def create_file_type_chart(self):
+        file_types = self.get_file_type_distribution()
+        fig = px.pie(values=list(file_types.values()), names=list(file_types.keys()), title="File Type Distribution")
+        return fig
+
+    def get_file_type_distribution(self):
+        file_types = {}
+        for root, _, files in os.walk(self.current_dir):
+            for file in files:
+                ext = os.path.splitext(file)[1].lower()
+                file_types[ext] = file_types.get(ext, 0) + 1
+        return file_types
+
+#     def go_to_home(self):
+#         self.current_dir = os.path.expanduser("~")
+# # =======
+# #         self.create_widgets()
+# # >>>>>>> main
+#         self.update_file_list()
+
+#     def go_desktop(self):
+#         self.current_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+#         self.update_file_list()
+
+#     def go_to_current_directory(self):
+#         self.current_dir = os.getcwd()
+#         self.update_file_list()
 
     def user_activity(self, event=None):
         """Reset the timer whenever user activity is detected"""
@@ -139,7 +323,7 @@ class FileManagerGUI:
         self.cloud = CloudManager(self.username, gui_callback=self)
         self.update_cloud_status('disconnected')
 
-####################################################################################################
+
 # Modern File Manager GUI widgets
     def create_widgets(self):
         # Apply a modern theme with ttk
@@ -276,8 +460,10 @@ class FileManagerGUI:
         self.settings_button.pack(side=tk.RIGHT, padx=2)
 
         # Activity Log button - Added here with consistent styling and an appropriate icon
-        self.log_button = ttk.Button(right_section, text="📋 Activity Log", command=self.show_activity_log)
-        self.log_button.pack(side=tk.RIGHT, padx=2)
+        # self.log_button = ttk.Button(right_section, text="📋 Activity Log", command=self.show_activity_log)
+        # self.log_button.pack(side=tk.RIGHT, padx=2)
+
+
         
         # Automation window button
         self.automation_button = ttk.Button(right_section, text="⚙️ Automation", 
@@ -299,10 +485,6 @@ class FileManagerGUI:
         # Add the Gemini AI Chat button in the bottom center
         self.gemini_button = ttk.Button(bottom_frame, text="🤖 Chat AI", command=self.gemini_AI_assist)
         self.gemini_button.pack()
-        # AI Assistant button
-        # self.ai_assistant_button = ttk.Button(right_section, text="🤖 AI Assistant", 
-        #                                     command=self.gemini_AI_assist)
-        # self.ai_assistant_button.pack(side=tk.RIGHT, padx=2)
 
 # ============================================================================================
 # AI button
@@ -333,12 +515,11 @@ class FileManagerGUI:
         settings_window = tk.Toplevel(self.root)
         settings_window.title("DocuVault Settings")
         settings_window.geometry("450x350")
-        settings_window.resizable(False, False)
-        
         # Create main container with padding
         settings_frame = ttk.Frame(settings_window, padding=15)
         settings_frame.pack(fill="both", expand=True)
-        
+        ttk.Label(settings_window, text="Settings", font=("Arial", 16, "bold")).pack(pady=10)
+        ttk.Label(settings_window, text="Add your settings options here").pack(pady=5)
         # Add header
         header_label = ttk.Label(settings_frame, text="User Settings", 
                             font=("Segoe UI", 14, "bold"))
@@ -361,7 +542,6 @@ class FileManagerGUI:
 
     def create_settings_frame(self, settings_frame):
         """Create settings sections including sign out and delete account"""
-        
         # Add Sign Out section
         session_section = ttk.LabelFrame(settings_frame, text="Session Management")
         session_section.pack(fill="x", pady=10, padx=5)
@@ -370,8 +550,38 @@ class FileManagerGUI:
                 command=self.sign_out, style="Accent.TButton"
         )
         signout_button.pack(pady=5)
+        archive_section = ttk.LabelFrame(settings_frame, text="Archive Settings")
+        archive_section.pack(fill="x", pady=10, padx=5)
         
+        archive_toggle = ttk.Checkbutton(archive_section, text="Enable Auto-Archiving",
+                                        variable=self.archive_mode,
+                                        command=self.toggle_archive_options)
+        archive_toggle.pack(pady=5)
+
+        # Archive age selection
+        self.age_frame = ttk.Frame(archive_section)
+        self.age_frame.pack(pady=5)
+        ttk.Label(self.age_frame, text="Archive files older than:").pack(side=tk.LEFT)
+        age_entry = ttk.Entry(self.age_frame, textvariable=self.archive_age, width=5)
+        age_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Label(self.age_frame, text="days").pack(side=tk.LEFT)
+
+        # Initially disable age selection if archive mode is off
+        self.toggle_archive_options()
+        # Add Dashboard section
+        dashboard_section = ttk.LabelFrame(settings_frame, text="Dashboard")
+        dashboard_section.pack(fill="x", pady=10, padx=5)
+        # Dashboard button
+        dashboard_button = ttk.Button(dashboard_section, text="Open Dashboard", command=self.show_dashboard)
+        dashboard_button.pack(pady=5)
+        #Log Viewer
+        log_section = ttk.LabelFrame(settings_frame, text="Activity Logs")
+        log_section.pack(fill="x", pady=10, padx=5)
+        #Log Button
+        log_button = ttk.Button(log_section, text="View Logs", command=self.show_activity_log)
+        log_button.pack(pady=5)
         # Add Delete Account section
+
         delete_section = ttk.LabelFrame(settings_frame, text="Delete Account")
         delete_section.pack(fill="x", pady=10, padx=5)
         
@@ -458,6 +668,13 @@ class FileManagerGUI:
         for text, command in operations:
             btn = ttk.Button(self.center_section, text=text, command=command)
             btn.pack(side=tk.LEFT, padx=2)
+    def toggle_archive_options(self):
+        if self.archive_mode.get():
+            for child in self.age_frame.winfo_children():
+                child.configure(state='normal')
+        else:
+            for child in self.age_frame.winfo_children():
+                child.configure(state='disabled')
 
     def select_all(self, event=None):
         """Select all items in the current view"""
@@ -1013,6 +1230,7 @@ class FileManagerGUI:
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
                     context_menu.add_command(label="Upload to Cloud", 
                                             command=lambda: self.upload_to_cloud(item_path))
+
                 context_menu.add_command(label="Metadata", command=self.show_metadata)  # New metadata option 
                 context_menu.tk_popup(event.x_root, event.y_root)
         else:
@@ -2095,6 +2313,7 @@ class FileManagerGUI:
             self.cloud_status.config(text="💭❌", foreground="red")
             self.connect_cloud_button.config(text="Reconnect")
 
+
 # =====================================================================================================
 # GEMINI AI ASSISTANT
 # =====================================================================================================
@@ -2207,4 +2426,4 @@ class FileManagerGUI:
         chat_history.append({'role': 'assistant', 'content': initial_greeting})
 
 
-        
+    
