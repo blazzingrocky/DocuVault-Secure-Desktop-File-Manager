@@ -3,10 +3,10 @@ name: CI Pipeline
 on:
   push:
     branches: 
-        - sharanya
+        - CI-CD_temp
   pull_request:
     branches:
-        - sharanya
+        - CI-CD_temp
 
 jobs:
   test:
