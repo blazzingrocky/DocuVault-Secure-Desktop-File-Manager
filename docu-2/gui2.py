@@ -12,9 +12,15 @@ from utility import CustomDirectoryDialog, compare_path
 from database2 import log_action, get_user_logs, delete_user_logs
 from cloud import CloudManager
 import schedule
+
+import matplotlib.pyplot as plt
+import plotly.express as px
+
+
 from dashboard import Dashboard
 import requests
 import webbrowser
+
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -34,6 +40,7 @@ class Tooltip:
         self.tooltip.wm_geometry(f"+{x}+{y}")
         
         label = ttk.Label(self.tooltip, text=self.text,
+
                          background="#333333", foreground="#ffffff", relief="solid", borderwidth=1,
                          padding=(5, 3))
         label.pack()
@@ -47,7 +54,7 @@ class Tooltip:
 #     def __init__(self, parent, username):
 #         super().__init__(parent)
 #         self.title("Activity Logs")
-#         self.tree = ttk.Treeview(self, columns=('Time', 'Action', 'Type', 'Path', 'Details'))
+
         
 #         self.tree.heading('#0', text='ID')
 #         self.tree.column('#0', width=50)
@@ -62,8 +69,8 @@ class Tooltip:
 #         self.tree.pack(expand=True, fill='both')
 
 class LogViewer(tk.Toplevel):
-    def _init_(self, parent, username):
-        super()._init_(parent)
+    def __init__(self, parent, username):
+        super().__init__(parent)
         self.title("Activity Logs")
         self.username = username  # Store username as instance variable
         
@@ -143,13 +150,13 @@ class LogViewer(tk.Toplevel):
                 self.load_logs()  # Refresh the display
             else:
                 messagebox.showerror("Error", "Failed to delete logs. Please try again.")
-    
 
 class FileManagerGUI:
     def __init__(self, username):
         self.root = tk.Tk()
         self.root.withdraw()  # Hide the main window initially
         self.username = username
+
         self.current_dir = os.getcwd()
 
         self.sort_by = "name"
@@ -168,10 +175,12 @@ class FileManagerGUI:
         self.file_manager = FileManager(username, self.bin_dir,self.archive_dir)
         self.automation_folder = self.file_manager.automation_folder
 
+
         self.history = [self.current_dir]
         self.history_position = 0
 
         self.setup_shortcuts()
+
         #Initialize cloud
         self.root.after(100, self.initialize_cloud)
         self.create_widgets()
@@ -179,19 +188,24 @@ class FileManagerGUI:
         # Show dashboard immediately
         self.show_dashboard()
 
-    def show_dashboard(self):
-        Dashboard(self)
+
+    def show_dashboard(self, first_time=True):  
+        Dashboard(self, first_time)
+
+
 
     def initialize_main_window(self, initial_dir):
         self.current_dir = initial_dir
         self.root.deiconify()  # Show the main window
         self.root.title("DocuVault: Secure Desktop File Manager")
+
         # self.root.geometry("800x400")
         # Tell window to start maximized
         if os.name == 'nt':
             self.root.state('zoomed')  # Windows
         else:
             self.root.attributes('-zoomed', True)
+
 
         try:
             self.root.iconbitmap("AppIcon\\Docu-icon.ico")
@@ -225,7 +239,12 @@ class FileManagerGUI:
                     video_count += 1
 
         return text_count, image_count, video_count
-    
+
+    def create_file_type_chart(self):
+        file_types = self.get_file_type_distribution()
+        fig = px.pie(values=list(file_types.values()), names=list(file_types.keys()), title="File Type Distribution")
+        return fig
+
 
     def get_file_type_distribution(self):
         file_types = {}
@@ -234,7 +253,6 @@ class FileManagerGUI:
                 ext = os.path.splitext(file)[1].lower()
                 file_types[ext] = file_types.get(ext, 0) + 1
         return file_types
-
 
     def run_scheduler(self):
         while True:
@@ -626,6 +644,7 @@ class FileManagerGUI:
         except Exception as e:
             pass
 
+
     def reset_search_filters(self):
         """Reset all search filters to defaults"""
         self.file_type_var.set("All Files")
@@ -639,6 +658,19 @@ class FileManagerGUI:
         
         self.results_count_label.config(text="Results: 0 items found")
         self.search_status.config(text="Filters reset")
+1
+    def execute_search(self):
+        search_term = self.search_entry.get()
+        file_type = self.file_type_var.get()
+        date_filter = self.date_var.get()
+        size_filter = self.size_var.get()
+
+        extensions = self.get_extensions_for_file_type(file_type)
+        date_limit = self.get_date_limit(date_filter)
+
+        results = self.file_manager.recursive_search_with_filters(self.current_dir, search_term, extensions, date_limit, size_filter)
+
+        self.populate_search_results(results)
 
 
     def get_extensions_for_file_type(self, file_type):
@@ -698,6 +730,7 @@ class FileManagerGUI:
             style = ttk.Style()
             style.configure("Treeview", background="#2a2a2a", fieldbackground="#2a2a2a", foreground="white")
             style.map('Treeview', background=[('selected', '#0078d7')])
+
         
         top_frame = ttk.Frame(self.root)
         top_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -706,6 +739,7 @@ class FileManagerGUI:
         nav_frame.pack(side=tk.LEFT)
         
         nav_buttons = [
+
             ("⬅️", self.go_back, "Back"),
             ("➡️", self.go_forward, "Forward"),
             ("⬆️", self.go_to_parent_directory, "Parent Directory"),
@@ -740,6 +774,7 @@ class FileManagerGUI:
         self.connect_cloud_button.pack(side=tk.RIGHT, padx=5)
         
         # Cloud setup button
+
         cloud_setup_btn = ttk.Button(cloud_frame, text="💭 Cloud Setup",
                                      command=self.setup_cloud_config)
         cloud_setup_btn.pack(side=tk.RIGHT, padx=2)
@@ -748,6 +783,7 @@ class FileManagerGUI:
         cloud_website_btn = ttk.Button(cloud_frame, text="🌐 Open Cloud", 
                                     command=self.open_cloud_website)
         cloud_website_btn.pack(side=tk.RIGHT, padx=2)
+
         
         # Second toolbar for file operations
         toolbar_frame = ttk.Frame(self.root)
@@ -815,6 +851,7 @@ class FileManagerGUI:
         # Right section: Special operations
         right_section = ttk.Frame(toolbar_frame)
         right_section.pack(side=tk.RIGHT)
+
         # Add theme toggle button
         theme_button = ttk.Button(right_section, text="🌓 Theme", command=self.toggle_theme)
         theme_button.pack(side=tk.RIGHT, padx=2)
@@ -826,7 +863,9 @@ class FileManagerGUI:
         
         
         # Automation window button
+
         self.automation_button = ttk.Button(right_section, text="✨ Automation",
+
                                             command=self.open_automation_window)
         self.automation_button.pack(side=tk.RIGHT, padx=2)
         
@@ -835,6 +874,7 @@ class FileManagerGUI:
         self.log_button.pack(side=tk.RIGHT, padx=2)
         
         # Cloud search button
+
         cloud_search_btn = ttk.Button(right_section, text="💭 Cloud Search",
                                       command=self.search_cloud_files)
         cloud_search_btn.pack(side=tk.RIGHT, padx=2)
@@ -846,6 +886,7 @@ class FileManagerGUI:
         # Add the Gemini AI Chat button in the bottom center
         self.gemini_button = ttk.Button(bottom_frame, text="🤖 Chat AI", command=self.gemini_AI_assist)
         self.gemini_button.pack()
+
         
         # Create a frame for the file tree and scrollbar
         tree_frame = ttk.Frame(self.root)
@@ -861,6 +902,8 @@ class FileManagerGUI:
         self.file_tree.configure(yscrollcommand=vsb.set)
         
         # Set up event bindings
+
+
         self.file_tree.bind('<Control-a>', self.select_all)
         self.file_tree.bind("<Double-1>", self.on_double_click)
         self.file_tree.bind("<Button-3>", self.show_context_menu)
@@ -900,6 +943,7 @@ class FileManagerGUI:
         
         # Search files
         self.root.bind("<Control-f>", lambda e: self.search_files())
+
 
 
 ################SETTING and DELETE ACCOUNT############################
@@ -966,7 +1010,11 @@ class FileManagerGUI:
         dashboard_section = ttk.LabelFrame(settings_frame, text="Dashboard")
         dashboard_section.pack(fill="x", pady=10, padx=5)
         # Dashboard button
-        dashboard_button = ttk.Button(dashboard_section, text="Open Dashboard", command=self.show_dashboard)
+# <<<<<<< main-2
+        dashboard_button = ttk.Button(dashboard_section, text="Open Dashboard", command=lambda: [dashboard_section.winfo_toplevel().destroy(), self.show_dashboard(False)])
+# =======
+#         dashboard_button = ttk.Button(dashboard_section, text="Open Dashboard", command=self.show_dashboard)
+# >>>>>>> main
         dashboard_button.pack(pady=5)
         #Log Viewer
         log_section = ttk.LabelFrame(settings_frame, text="Activity Logs")
@@ -998,7 +1046,9 @@ class FileManagerGUI:
                 "Please enter your password to confirm deletion:", show='*')
             
             if password:
-                from database import delete_user_account, login_user
+
+                from database2 import delete_user_account, login_user
+
                 
                 # Verify password first
                 if login_user(self.username, password):
@@ -1066,6 +1116,7 @@ class FileManagerGUI:
     def go_to_desktop(self):
         if self.current_dir == self.bin_dir:
             restrict_access(self.bin_dir)
+
         desktop_path = os.path.join(os.path.expanduser('~'), r'OneDrive\Desktop')
         if os.path.exists(desktop_path):
             self.current_dir = desktop_path
@@ -1079,7 +1130,9 @@ class FileManagerGUI:
         item_id = self.search_tree.selection()[0]
         item_values = self.search_tree.item(item_id, 'values')
         if item_values:
+
             item_path = item_values[1]
+
             if os.path.isfile(item_path):
                 self.file_manager.open_file(item_path)
             elif os.path.isdir(item_path):
@@ -1093,7 +1146,9 @@ class FileManagerGUI:
             item_values = self.search_tree.item(item, 'values')
             
             if item_values:
+
                 item_path = item_values[1]
+
 
                 if not item_path:
                     return
@@ -1104,8 +1159,10 @@ class FileManagerGUI:
                 if 'cloud' in self.search_tree.item(item, 'tags'):
                     context_menu.add_command(label="Download from Cloud", 
                                         command=lambda: self.download_cloud_item(item_path))
+
                     context_menu.add_command(label="Share Cloud File",
                                         command=lambda: self.share_cloud_item(item_path))
+
                     context_menu.add_command(label="Delete from Cloud", command=lambda: self.delete_cloud_item(item_path))
                 else:
                     context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))                
@@ -1179,12 +1236,31 @@ class FileManagerGUI:
                 messagebox.showerror("Error", f"Could not access directory: {e}")
                 return
 
-            if self.sort_by == 'name':
+            def safe_getsize(item):
+                try:
+                    # Attempt to retrieve the file size
+                    return os.path.getsize(os.path.join(directory, item))
+                except PermissionError:
+                    # If permission is denied, return 0
+                    return 0
+                
+            def safe_getmtime(item):
+                try:
+                    # Attempt to retrieve the file modification time
+                    return os.path.getmtime(os.path.join(directory, item))
+                except PermissionError:
+                    # If permission is denied, return 0
+                    return time.time()
+                
+            # Sort items based on the selected criteria
+            if self.sort_by == "name":
                 items = sorted(items)
-            elif self.sort_by == 'size':
-                items = sorted(items, key=lambda x: os.path.getsize(os.path.join(directory, x)))
-            elif self.sort_by == 'date':
-                items = sorted(items, key=lambda x: os.path.getmtime(os.path.join(directory, x)))
+            elif self.sort_by == "size":
+                items = sorted(items, key=safe_getsize, reverse=True)
+            elif self.sort_by == "date":
+                items = sorted(items, key=safe_getmtime, reverse=True)
+
+
             # Add parent directory entry
             if depth > 0:
                 parent_dir = os.path.dirname(directory)
@@ -1221,9 +1297,10 @@ class FileManagerGUI:
                     messagebox.showerror("Error", f"Could not process {item}")
 
         except Exception as e:
-            pass
             # messagebox.showerror("Critical Error", 
             #     f"Failed to populate directory structure: {str(e)}")
+            pass
+
 
     def on_double_click(self, event):
         try:
@@ -1260,7 +1337,9 @@ class FileManagerGUI:
                     context_menu.add_command(label="Delete", command=lambda: self.delete_item())
                     context_menu.add_command(label="Empty Bin", command=lambda: self.empty_bin())
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
+
                     context_menu.add_command(label="Properties", command=lambda: self.show_properties(item_path))
+
                 else:
                     context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
                     context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))
@@ -1272,7 +1351,9 @@ class FileManagerGUI:
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
                     context_menu.add_command(label="Upload to Cloud", 
                                             command=lambda: self.upload_to_cloud(item_path))
+
                     context_menu.add_command(label="Properties", command=lambda: self.show_properties(item_path))
+
                 
                 context_menu.tk_popup(event.x_root, event.y_root)
         else:
@@ -1306,12 +1387,14 @@ class FileManagerGUI:
                 # If successful, update current_dir and file list
                 self.current_dir = path
 
+
                 # Update history - truncate forward history if we've gone back and now moving in a new direction
                 if self.history_position < len(self.history) - 1:
                     self.history = self.history[:self.history_position+1]
                 
                 self.history.append(path)
                 self.history_position = len(self.history) - 1
+
 
                 self.update_file_list()
             except PermissionError:
@@ -1323,6 +1406,7 @@ class FileManagerGUI:
         if self.current_dir == self.bin_dir:
             messagebox.showinfo("Bin Directory","You are currently in the DocuVault Bin.\n\nClick on Home/Desktop to get out of Bin.")
             return
+
         
         if self.current_dir != os.path.expanduser("~"):
             parent_dir = os.path.dirname(self.current_dir)
@@ -1337,6 +1421,7 @@ class FileManagerGUI:
             
             # Update current directory and refresh the display
             self.current_dir = parent_dir
+
             self.update_file_list()
         else:
             messagebox.showinfo("Home Directory", "You are already at the home directory.")
@@ -1427,6 +1512,7 @@ class FileManagerGUI:
         destination = dest_dialog.selected_path
         if destination:
             result = self.file_manager.move_item(items_to_move, destination)
+
             if result["success_count"] > 0:
                 messagebox.showinfo("Success", f"Successfully moved {result['success_count']} item(s) to {result['destination']}")
             
@@ -1609,6 +1695,7 @@ class FileManagerGUI:
         status: 'connected', 'disconnected', 'failed'
         """
         if status == 'connected':
+
             self.cloud_status.config(text="💭✅", foreground="#00ff7f")
             self.connect_cloud_button.config(text="Cloud Connected")
         elif status == 'disconnected':
@@ -1634,6 +1721,7 @@ class FileManagerGUI:
         config_win.title("Cloud Configuration")
         config_win.geometry("300x300")
 
+
         entries = [
             ("Server URL", "server_url"),
             ("Username", "cloud_user"),
@@ -1653,7 +1741,9 @@ class FileManagerGUI:
 
             if not url or not user or not password:
                 messagebox.showerror("Error", "Please fill in all fields")
+
                 config_win.destroy()
+
                 return
             self.cloud.store_credentials(
                 server_url=url,
@@ -1691,7 +1781,9 @@ class FileManagerGUI:
             self.progress_window.after(2000, self.progress_window.destroy)
 
     def delete_cloud_item(self, cloud_path):
+
         remote_path = f"/{cloud_path[7:]}"
+
         if messagebox.askyesno("Confirm", "Delete from cloud?"):
             self.cloud.delete_file(remote_path)
 
@@ -1707,7 +1799,9 @@ class FileManagerGUI:
 
     def display_cloud_results(self, results):
         if self.search_results_window and tk.Toplevel.winfo_exists(self.search_results_window):
+
             self.search_tree.tag_configure(tagname='cloud', foreground='#00bfff')
+
             if not results or len(results) == 0:
                 self.search_tree.insert("", "end",
                                         text="No matching cloud records",
@@ -1934,6 +2028,7 @@ class FileManagerGUI:
     def download_cloud_item(self, cloud_path):
         filename = os.path.basename(cloud_path)
         remote_path = f"/{cloud_path[7:]}"
+
         dest_dialog = CustomDirectoryDialog(self.root, self.current_dir)
         self.root.wait_window(dest_dialog)
         if dest_dialog.selected_path:
@@ -1987,6 +2082,10 @@ class FileManagerGUI:
         else:
             messagebox.showinfo("Cloud Upload", "Please connect to cloud first")
 
+# <<<<<<< main-2
+#     def run(self):
+#         self.root.mainloop()
+# =======
     def share_cloud_item(self, cloud_path):
             """
             GUI method to collect sharing options and call CloudManager's backend function.

@@ -6,7 +6,9 @@ import time
 import sqlite3
 import subprocess
 import json
-from database2 import log_action
+
+from database2 import log_action,log_file_operation
+
 from tkinter import messagebox
 from datetime import datetime, timedelta
 
@@ -16,7 +18,9 @@ def remove_readonly(func, path, _):
         os.chmod(path, stat.S_IWRITE) # Remove read-only flag
         func(path)
     except Exception as e:
+
         messagebox.showerror("Error", f"Error removing read-only attribute: {e}")
+
 
 def restrict_access(path):
     """Restrict all access permissions to the specified file or directory."""
@@ -24,7 +28,9 @@ def restrict_access(path):
         # Use oschmod instead of os.chmod for cross-platform compatibility
         oschmod.set_mode(path, 0o000) # No permissions for anyone
     except Exception as e:
+
         messagebox.showerror("Error", f"Error restricting access: {e}")
+
 
 def allow_access(path):
     """Allow all access permissions to the specified file or directory."""
@@ -32,7 +38,9 @@ def allow_access(path):
         # Use oschmod instead of os.chmod for cross-platform compatibility
         oschmod.set_mode(path, 0o755) # rwx for owner, rx for group and others
     except Exception as e:
+
         messagebox.showerror("Error", f"Error allowing access: {e}")
+
 
 class FileManager:
     def __init__(self, username, bin_dir,archive_dir):
@@ -40,7 +48,10 @@ class FileManager:
         self.bin_dir = bin_dir
         self.archive_dir = archive_dir
         self.automation_folder = self.get_automation_folder(username)
-        self.dbconnection = sqlite3.connect('filemanager.db', timeout=30.0)
+
+        self.db_connection = sqlite3.connect('filemanager.db', timeout=30.0)
+
+
 
     def get_automation_folder(self, username):
         conn = sqlite3.connect('docuvault.db')
@@ -155,7 +166,9 @@ class FileManager:
                     try:
                         # Check if file is older than archive_age days and has valid extension
                         # file_ext = os.path.splitext(file_path)[1].lower().strip('.')
+
                         if (current_time - os.path.getmtime(file_path) > archive_age*3600*24 and 
+
                             any(file_path.split('.')[-1] for each in list_of_extensions)):
                             confirm=messagebox.askyesno("Confirm Archive", f"Are you sure you want to archive {file}?")
                             if confirm:
@@ -313,6 +326,7 @@ class FileManager:
         
         return results
 
+
     def rename_item(self, item_path, new_name):
         """Rename a file or folder"""
         try:
@@ -321,8 +335,10 @@ class FileManager:
             
             # Check if destination already exists
             if os.path.exists(new_path):
+
                 confirm = messagebox.askyesno("Confirm Overwrite",
                                              f"'{new_name}' already exists. Overwrite?")
+
                 if confirm:
                     if item_type == 'file':
                         os.remove(new_path)
@@ -330,12 +346,14 @@ class FileManager:
                         shutil.rmtree(new_path, onexc=remove_readonly)
                 else:
                     return True, item_path
+
                     
             os.rename(item_path, new_path)
             log_action(self.username, 'RENAME', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} â†’ {new_path}")
             return True, new_path
         except Exception as e:
             return False, f"Could not rename item: {e}"
+
 
     def get_available_apps(self, file_path):
         """Get list of available applications to open a file"""
@@ -583,6 +601,7 @@ class FileManager:
         
         # Track success and failure
         success_count = 0
+
         failed_items = []
         skipped_items = []
         
@@ -597,7 +616,9 @@ class FileManager:
             try:
                 base_name = os.path.basename(item_path)
                 dest_path = os.path.join(destination, base_name)
+
                 item_type = 'file' if os.path.isfile(item_path) else 'folder'
+
                 
                 # Handle file conflicts
                 if os.path.exists(dest_path):
@@ -629,9 +650,13 @@ class FileManager:
                         shutil.rmtree(dest_path, onexc=remove_readonly)
                         
                 # Perform the move
+
                 shutil.move(item_path, destination)
-                log_action(self.username, 'MOVE', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} -> {destination}")
                 success_count += 1
+
+                log_action(self.username, 'MOVE', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} -> {destination}")
+                
+
                 
             except Exception as e:
                 failed_items.append(f"{os.path.basename(item_path)}: {str(e)}")
@@ -671,14 +696,19 @@ class FileManager:
                         counter += 1
                         
                 # Perform the copy
+
+
                 if os.path.isfile(item_path):
                     shutil.copy2(item_path, dest_path)
                 elif os.path.isdir(item_path):
                     shutil.copytree(item_path, dest_path)
-                    
-                item_type = 'file' if os.path.isfile(item_path) else 'folder'
-                log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} copy-> {dest_path}")
                 success_count += 1
+            
+                item_type = 'file' if os.path.isfile(item_path) else 'folder'
+
+                log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} copy-> {dest_path}")
+                
+
                 
             except Exception as e:
                 failed_items.append(f"{os.path.basename(item_path)}: {str(e)}")
@@ -777,9 +807,9 @@ class FileManager:
                         
                 # Perform restore operation
                 shutil.move(item_path, destination)
+                success_count += 1
                 item_type = 'file' if os.path.isfile(dest_path) else 'folder'
                 log_action(self.username, 'RESTORE', 'FILE' if item_type=='file' else 'FOLDER', f"{item_path} -> {destination}")
-                success_count += 1
                 
             except Exception as e:
                 failed_items.append(f"{base_name}: {str(e)}")
