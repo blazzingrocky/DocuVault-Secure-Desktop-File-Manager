@@ -1,6 +1,6 @@
 # DocuVault: Secure Desktop File Manager
 DocuVault is a comprehensive desktop file management solution built with Python and Tkinter that provides advanced file organization, security, and automation features for efficient document handling.
-# Features
+## Features
 Core File Management
 Basic Operations: Copy, move, delete, and rename files and folders with intuitive interface
 
@@ -12,7 +12,7 @@ Search Functionality: Powerful search with filters for file type, date, and size
 
 Sort Options: Organize files by name, date, or size with a single click
 
-# Security
+## Security
 User Authentication: Secure login system with username and password protection
 
 File Encryption: Built-in AES-256-GCM encryption for sensitive files
@@ -21,7 +21,7 @@ Activity Logging: Comprehensive logging of all file operations for accountabilit
 
 Auto-logout: Automatic session termination after period of inactivity
 
-# Automation
+## Automation
 AI-Powered Classification: Automatically categorize files based on content analysis
 
 Scheduled Backups: Configure automatic backups of frequently accessed files
@@ -30,7 +30,7 @@ File Monitoring: Track file access patterns to optimize organization
 
 Auto-archiving: Set custom thresholds for moving older files to archive
 
-# Cloud Integration
+## Cloud Integration
 Nextcloud Support: Connect to Nextcloud for remote file storage
 
 Cloud Search: Search files stored in the cloud from within the application
@@ -39,7 +39,7 @@ Synchronization: Keep local and cloud files in sync
 
 File Sharing: Share cloud-stored files directly from the interface
 
-# User Interface
+## User Interface
 Modern Design: Clean, intuitive interface with light and dark themes
 
 File Preview: Built-in preview for common file types
@@ -48,7 +48,7 @@ Dashboard: Visual overview of storage usage and file distribution
 
 Context Menus: Right-click functionality for quick access to common operations
 
-# Advanced Features
+## Advanced Features
 Multi-select Operations: Perform actions on multiple files simultaneously
 
 Drag and Drop: Intuitive file movement between folders
@@ -61,30 +61,33 @@ Account Management: User profile settings and account deletion options
 
 ChatBot: Provides user assistance
 
-# Installation
+## Testing
+Unittest module of Python have been used to test the backend functionalities.
 
-# Prerequisites
+## Installation
+
+### Prerequisites
 Python 3.7 or higher
 
-# Required Python packages (install via pip):
+### Required Python packages (install via pip):
 
 text
 pip install tkinter pillow pycryptodome schedule requests
 
-# Setup
+### Setup
 Clone the repository:
 
 text
 git clone https://github.com/yourusername/docuvault.git
 cd docuvault
 
-# Run the application:
+### Run the application:
 
 text
 python main.py
 On first run, create a new account to get started.
 
-# Usage
+### Usage
 Getting Started
 Login/Register: Create an account or log in with existing credentials
 
@@ -94,7 +97,7 @@ File Operations: Right-click on files or use the toolbar for common operations
 
 Dashboard: View file statistics and storage usage at a glance
 
-# Automation Setup
+### Automation Setup
 1. Go to Settings → Automation
 
 2. Configure the automation folder location
@@ -103,7 +106,7 @@ Dashboard: View file statistics and storage usage at a glance
 
 4. Set up auto-archiving preferences for older files
 
-# Encryption
+### Encryption
 1. Select files you want to encrypt
 
 2. Click the "Encrypt Files" button
@@ -112,16 +115,17 @@ Dashboard: View file statistics and storage usage at a glance
 
 4. Access encrypted files with password verification
 
-# Cloud Setup
-Go to Settings → Cloud Setup
+### Cloud Setup
+1.Go to Settings → Cloud Setup
 
-Enter your Nextcloud server URL and credentials
+2.Enter your Nextcloud server URL and credentials
 
-Use the cloud buttons to synchronize and manage remote files
+3. Use the cloud buttons to synchronize and manage remote files
 
 Search cloud storage directly from the main interface
 
-# Project Structure
+
+## Project Structure
 main.py: Application entry point
 
 login.py: User authentication system
@@ -142,7 +146,7 @@ dashboard.py: Analytics and statistics visualization
 
 utility.py: Helper functions and custom dialogs
 
-# Contributing
+## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 Fork the repository
@@ -167,7 +171,7 @@ The open-source community for various libraries and inspiration
 
 Azure theme for the modern UI appearance
 
-# Future Development
+## Future Development
 Mobile companion app for remote access
 
 Additional cloud storage providers (Google Drive, Dropbox)
