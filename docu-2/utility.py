@@ -4,7 +4,6 @@ from tkinter import ttk
 import os
 from tkinter import messagebox
 import time
-from PyPDF2 import PdfReader
 from pdfminer.high_level import extract_text
 
 def txt_from_pdf(pdf_path, output_path): 
@@ -31,11 +30,6 @@ def compare_path(st, pt):
 class CustomDirectoryDialog(tk.Toplevel):
     def __init__(self, parent, current_dir):
         super().__init__(parent)
-
-        # Bind events to track user activity
-        self.bind("<Key>", lambda e: parent.user_activity())
-        self.bind("<Motion>", lambda e: parent.user_activity())
-        self.bind("<Button>", lambda e: parent.user_activity())
 
         self.title("Select Destination Folder")
         self.geometry("600x400")
@@ -381,7 +375,3 @@ class CustomFileDialog(tk.Toplevel):
     def update_file_list(self):
         """Refresh the tree view"""
         self.populate_tree(self.file_tree, self.current_dir)
-
-
-
-
