@@ -12,10 +12,15 @@ from utility import CustomDirectoryDialog, compare_path
 from database2 import log_action, get_user_logs, delete_user_logs
 from cloud import CloudManager
 import schedule
+
 import matplotlib.pyplot as plt
 import plotly.express as px
-from dashboard_new import Dashboard
-# from dashboard import Dashboard
+
+
+from dashboard import Dashboard
+import requests
+import webbrowser
+
 
 class Tooltip:
     def __init__(self, widget, text):
@@ -35,7 +40,8 @@ class Tooltip:
         self.tooltip.wm_geometry(f"+{x}+{y}")
         
         label = ttk.Label(self.tooltip, text=self.text,
-                         background="#ffffe0", relief="solid", borderwidth=1,
+
+                         background="#333333", foreground="#ffffff", relief="solid", borderwidth=1,
                          padding=(5, 3))
         label.pack()
     
@@ -48,9 +54,7 @@ class Tooltip:
 #     def __init__(self, parent, username):
 #         super().__init__(parent)
 #         self.title("Activity Logs")
-#         self.tree = ttk.Treeview(self, columns=('Time', 'Action', 'Type', 'Path', 'Details'))
-#         delete_button = tk.Button(self, text="Delete Logs", command=delete_user_logs(username), bg="red", fg="white")
-#         delete_button.pack(side='bottom', padx=5, pady=5)
+
         
 #         self.tree.heading('#0', text='ID')
 #         self.tree.column('#0', width=50)
@@ -147,19 +151,11 @@ class LogViewer(tk.Toplevel):
             else:
                 messagebox.showerror("Error", "Failed to delete logs. Please try again.")
 
-
 class FileManagerGUI:
     def __init__(self, username):
         self.root = tk.Tk()
         self.root.withdraw()  # Hide the main window initially
         self.username = username
-
-        # Configure default font
-        default_font = tk.font.nametofont("TkDefaultFont")
-        default_font.configure(size=11)  # Adjust size as needed
-        
-        text_font = tk.font.nametofont("TkTextFont")
-        text_font.configure(size=11)
 
         self.current_dir = os.getcwd()
 
@@ -179,6 +175,12 @@ class FileManagerGUI:
         self.file_manager = FileManager(username, self.bin_dir,self.archive_dir)
         self.automation_folder = self.file_manager.automation_folder
 
+
+        self.history = [self.current_dir]
+        self.history_position = 0
+
+        self.setup_shortcuts()
+
         #Initialize cloud
         self.root.after(100, self.initialize_cloud)
         self.create_widgets()
@@ -186,15 +188,24 @@ class FileManagerGUI:
         # Show dashboard immediately
         self.show_dashboard()
 
+
     def show_dashboard(self, first_time=True):  
         Dashboard(self, first_time)
+
 
 
     def initialize_main_window(self, initial_dir):
         self.current_dir = initial_dir
         self.root.deiconify()  # Show the main window
         self.root.title("DocuVault: Secure Desktop File Manager")
-        self.root.geometry("800x400")
+
+        # self.root.geometry("800x400")
+        # Tell window to start maximized
+        if os.name == 'nt':
+            self.root.state('zoomed')  # Windows
+        else:
+            self.root.attributes('-zoomed', True)
+
 
         try:
             self.root.iconbitmap("AppIcon\\Docu-icon.ico")
@@ -228,10 +239,12 @@ class FileManagerGUI:
                     video_count += 1
 
         return text_count, image_count, video_count
+
     def create_file_type_chart(self):
         file_types = self.get_file_type_distribution()
         fig = px.pie(values=list(file_types.values()), names=list(file_types.keys()), title="File Type Distribution")
         return fig
+
 
     def get_file_type_distribution(self):
         file_types = {}
@@ -241,20 +254,6 @@ class FileManagerGUI:
                 file_types[ext] = file_types.get(ext, 0) + 1
         return file_types
 
-#     def go_to_home(self):
-#         self.current_dir = os.path.expanduser("~")
-# # =======
-# #         self.create_widgets()
-# # >>>>>>> main
-#         self.update_file_list()
-
-#     def go_desktop(self):
-#         self.current_dir = os.path.join(os.path.expanduser("~"), "Desktop")
-#         self.update_file_list()
-
-#     def go_to_current_directory(self):
-#         self.current_dir = os.getcwd()
-#         self.update_file_list()
     def run_scheduler(self):
         while True:
             schedule.run_pending()
@@ -263,6 +262,7 @@ class FileManagerGUI:
     def initialize_cloud(self):
         self.cloud = CloudManager(self.username, gui_callback=self)
         self.update_cloud_status('disconnected')
+
     def user_activity(self, event=None):
         """Reset the timer whenever user activity is detected"""
         self.last_activity_time = time.time() * 1000
@@ -314,6 +314,7 @@ class FileManagerGUI:
             else:
                 messagebox.showinfo("Info", result)
         self.update_file_list()
+
     def backup_frequent_files(self):
         frequent_files = self.file_manager.get_frequently_accessed_files()
         if not self.cloud or not self.cloud.nc:
@@ -638,9 +639,12 @@ class FileManagerGUI:
             
             # Add to treeview
             self.search_tree.insert("", "end", text=icon, values=(name, path, item_type, size_str, date_str))
+            self.search_tree.tag_configure('selected', background='#1a73e8')
             
         except Exception as e:
             pass
+
+
     def reset_search_filters(self):
         """Reset all search filters to defaults"""
         self.file_type_var.set("All Files")
@@ -654,7 +658,7 @@ class FileManagerGUI:
         
         self.results_count_label.config(text="Results: 0 items found")
         self.search_status.config(text="Filters reset")
-
+1
     def execute_search(self):
         search_term = self.search_entry.get()
         file_type = self.file_type_var.get()
@@ -667,6 +671,7 @@ class FileManagerGUI:
         results = self.file_manager.recursive_search_with_filters(self.current_dir, search_term, extensions, date_limit, size_filter)
 
         self.populate_search_results(results)
+
 
     def get_extensions_for_file_type(self, file_type):
         if file_type == "Documents":
@@ -693,30 +698,39 @@ class FileManagerGUI:
         else:
             return None
 
-    # def create_search_treeview(self):
-    #     results_frame = ttk.Frame(self.search_results_window)
-    #     results_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-
-    #     self.results_count_label = ttk.Label(results_frame, text="Results: 0 items found")
-    #     self.results_count_label.pack(anchor=tk.W, pady=(0, 5))
-
-    #     self.search_tree = ttk.Treeview(results_frame)
-    #     self.search_tree.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
-
-    #     vsb = ttk.Scrollbar(results_frame, orient="vertical", command=self.search_tree.yview)
-    #     vsb.pack(side=tk.RIGHT, fill=tk.Y)
-    #     self.search_tree.configure(yscrollcommand=vsb.set)
-
-    #     self.search_tree["columns"] = ("name", "path", "type", "size", "modified")
-    #     self.search_tree.column("#0", width=40, minwidth=40)
-    #     self.search_tree.column("name", width=200, minwidth=100)
+    def toggle_theme(self):
+        """Toggle between light and dark Azure themes"""
+        try:
+            current_theme = self.root.tk.call("ttk::style", "theme", "use")
+            if current_theme == "azure-dark":
+                self.root.tk.call("set_theme", "light")
+            else:
+                self.root.tk.call("set_theme", "dark")
+        except Exception as e:
+            print(f"Error toggling theme: {e}")
+            messagebox.showerror("Theme Error", f"Failed to toggle theme: {str(e)}")
 
     def create_widgets(self):
         style = ttk.Style()
+        # Import Azure theme
         try:
-            style.theme_use('vista' if os.name == 'nt' else 'clam')
-        except tk.TclError:
-            style.theme_use('default')
+            self.root.tk.call("source", "azure.tcl")
+            self.root.tk.call("set_theme", "dark")  # Start with dark theme
+        except tk.TclError as e:
+            # Fallback to standard themes if Azure is not available
+            print(f"Azure theme not loaded: {e}")
+            style = ttk.Style()
+            try:
+                style.theme_use('vista' if os.name == 'nt' else 'clam')
+            except tk.TclError:
+                style.theme_use('default')
+
+        if self.root.tk.call("ttk::style", "theme", "use") == "azure-dark":
+            # Custom dark theme adjustments
+            style = ttk.Style()
+            style.configure("Treeview", background="#2a2a2a", fieldbackground="#2a2a2a", foreground="white")
+            style.map('Treeview', background=[('selected', '#0078d7')])
+
         
         top_frame = ttk.Frame(self.root)
         top_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -725,7 +739,10 @@ class FileManagerGUI:
         nav_frame.pack(side=tk.LEFT)
         
         nav_buttons = [
-            ("↩️", self.go_to_parent_directory, "Back"),
+
+            ("⬅️", self.go_back, "Back"),
+            ("➡️", self.go_forward, "Forward"),
+            ("⬆️", self.go_to_parent_directory, "Parent Directory"),
             ("🏠", self.go_to_root, "Home"),
             ("💻", self.go_to_desktop, "Desktop"),
             ("🔄", self.update_file_list, "Refresh"),
@@ -757,9 +774,16 @@ class FileManagerGUI:
         self.connect_cloud_button.pack(side=tk.RIGHT, padx=5)
         
         # Cloud setup button
-        cloud_setup_btn = ttk.Button(cloud_frame, text="💭 Setup",
+
+        cloud_setup_btn = ttk.Button(cloud_frame, text="💭 Cloud Setup",
                                      command=self.setup_cloud_config)
         cloud_setup_btn.pack(side=tk.RIGHT, padx=2)
+
+        # Add the Open Cloud Website button
+        cloud_website_btn = ttk.Button(cloud_frame, text="🌐 Open Cloud", 
+                                    command=self.open_cloud_website)
+        cloud_website_btn.pack(side=tk.RIGHT, padx=2)
+
         
         # Second toolbar for file operations
         toolbar_frame = ttk.Frame(self.root)
@@ -827,6 +851,11 @@ class FileManagerGUI:
         # Right section: Special operations
         right_section = ttk.Frame(toolbar_frame)
         right_section.pack(side=tk.RIGHT)
+
+        # Add theme toggle button
+        theme_button = ttk.Button(right_section, text="🌓 Theme", command=self.toggle_theme)
+        theme_button.pack(side=tk.RIGHT, padx=2)
+
         self.settings_button = ttk.Button(right_section, text="⚙️ Settings", 
                                         command=self.show_settings_dialog)
         self.settings_button.pack(side=tk.RIGHT, padx=2)
@@ -834,7 +863,9 @@ class FileManagerGUI:
         
         
         # Automation window button
-        self.automation_button = ttk.Button(right_section, text="⚙️ Automation",
+
+        self.automation_button = ttk.Button(right_section, text="✨ Automation",
+
                                             command=self.open_automation_window)
         self.automation_button.pack(side=tk.RIGHT, padx=2)
         
@@ -843,9 +874,19 @@ class FileManagerGUI:
         self.log_button.pack(side=tk.RIGHT, padx=2)
         
         # Cloud search button
-        cloud_search_btn = ttk.Button(right_section, text="💭 Search",
+
+        cloud_search_btn = ttk.Button(right_section, text="💭 Cloud Search",
                                       command=self.search_cloud_files)
         cloud_search_btn.pack(side=tk.RIGHT, padx=2)
+
+        # Bottom Frame
+        bottom_frame = ttk.Frame(self.root)
+        bottom_frame.pack(side=tk.BOTTOM, pady=10)  # Place it at the bottom
+
+        # Add the Gemini AI Chat button in the bottom center
+        self.gemini_button = ttk.Button(bottom_frame, text="🤖 Chat AI", command=self.gemini_AI_assist)
+        self.gemini_button.pack()
+
         
         # Create a frame for the file tree and scrollbar
         tree_frame = ttk.Frame(self.root)
@@ -861,11 +902,50 @@ class FileManagerGUI:
         self.file_tree.configure(yscrollcommand=vsb.set)
         
         # Set up event bindings
-        self.root.bind('<Control-a>', self.select_all)
+
+
         self.file_tree.bind('<Control-a>', self.select_all)
         self.file_tree.bind("<Double-1>", self.on_double_click)
         self.file_tree.bind("<Button-3>", self.show_context_menu)
         self.file_tree.bind("<Button-1>", self.deselect_on_empty_space, add="+")
+
+    def toggle_fullscreen(self):
+        """Toggle between fullscreen and normal window mode"""
+        if self.root.attributes('-fullscreen'):
+            self.root.attributes('-fullscreen', False)
+        else:
+            self.root.attributes('-fullscreen', True)
+
+
+    def setup_shortcuts(self):
+        """Setup keyboard shortcuts for common operations"""
+        # Navigation shortcuts
+        self.root.bind("<Alt-Left>", lambda e: self.go_back())
+        self.root.bind("<Alt-Right>", lambda e: self.go_forward())
+        self.root.bind("<Alt-Up>", lambda e: self.go_to_parent_directory())
+        
+        # Add fullscreen toggle shortcut
+        self.root.bind("<Escape>", lambda e: self.toggle_fullscreen() if self.root.attributes('-fullscreen') else None)
+        self.root.bind("<F11>", lambda e: self.toggle_fullscreen())
+        
+        # File operations
+        self.root.bind("<Delete>", lambda e: self.delete_item())
+        self.root.bind("<F5>", lambda e: self.update_file_list())
+        
+        self.root.bind("<Control-a>", self.select_all)
+        
+        # Copy and move operations
+        self.root.bind("<Control-c>", lambda e: self.copy_item())
+        self.root.bind("<Control-x>", lambda e: self.move_item())
+        
+        # Create file/folder
+        self.root.bind("<Control-n>", lambda e: self.create_folder())
+        
+        # Search files
+        self.root.bind("<Control-f>", lambda e: self.search_files())
+
+
+
 ################SETTING and DELETE ACCOUNT############################
 
     def show_settings_dialog(self):
@@ -930,7 +1010,11 @@ class FileManagerGUI:
         dashboard_section = ttk.LabelFrame(settings_frame, text="Dashboard")
         dashboard_section.pack(fill="x", pady=10, padx=5)
         # Dashboard button
+# <<<<<<< main-2
         dashboard_button = ttk.Button(dashboard_section, text="Open Dashboard", command=lambda: [dashboard_section.winfo_toplevel().destroy(), self.show_dashboard(False)])
+# =======
+#         dashboard_button = ttk.Button(dashboard_section, text="Open Dashboard", command=self.show_dashboard)
+# >>>>>>> main
         dashboard_button.pack(pady=5)
         #Log Viewer
         log_section = ttk.LabelFrame(settings_frame, text="Activity Logs")
@@ -962,7 +1046,9 @@ class FileManagerGUI:
                 "Please enter your password to confirm deletion:", show='*')
             
             if password:
+
                 from database2 import delete_user_account, login_user
+
                 
                 # Verify password first
                 if login_user(self.username, password):
@@ -1030,7 +1116,8 @@ class FileManagerGUI:
     def go_to_desktop(self):
         if self.current_dir == self.bin_dir:
             restrict_access(self.bin_dir)
-        desktop_path = r"C:\Users\jbsch\OneDrive\Desktop"
+
+        desktop_path = os.path.join(os.path.expanduser('~'), r'OneDrive\Desktop')
         if os.path.exists(desktop_path):
             self.current_dir = desktop_path
             self.update_file_list()
@@ -1043,7 +1130,9 @@ class FileManagerGUI:
         item_id = self.search_tree.selection()[0]
         item_values = self.search_tree.item(item_id, 'values')
         if item_values:
-            item_path = item_values[0]
+
+            item_path = item_values[1]
+
             if os.path.isfile(item_path):
                 self.file_manager.open_file(item_path)
             elif os.path.isdir(item_path):
@@ -1057,7 +1146,9 @@ class FileManagerGUI:
             item_values = self.search_tree.item(item, 'values')
             
             if item_values:
-                item_path = item_values[0]
+
+                item_path = item_values[1]
+
 
                 if not item_path:
                     return
@@ -1068,6 +1159,10 @@ class FileManagerGUI:
                 if 'cloud' in self.search_tree.item(item, 'tags'):
                     context_menu.add_command(label="Download from Cloud", 
                                         command=lambda: self.download_cloud_item(item_path))
+
+                    context_menu.add_command(label="Share Cloud File",
+                                        command=lambda: self.share_cloud_item(item_path))
+
                     context_menu.add_command(label="Delete from Cloud", command=lambda: self.delete_cloud_item(item_path))
                 else:
                     context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))                
@@ -1140,6 +1235,7 @@ class FileManagerGUI:
             except Exception as e:
                 messagebox.showerror("Error", f"Could not access directory: {e}")
                 return
+
             def safe_getsize(item):
                 try:
                     # Attempt to retrieve the file size
@@ -1163,6 +1259,7 @@ class FileManagerGUI:
                 items = sorted(items, key=safe_getsize, reverse=True)
             elif self.sort_by == "date":
                 items = sorted(items, key=safe_getmtime, reverse=True)
+
 
             # Add parent directory entry
             if depth > 0:
@@ -1204,6 +1301,7 @@ class FileManagerGUI:
             #     f"Failed to populate directory structure: {str(e)}")
             pass
 
+
     def on_double_click(self, event):
         try:
             item_id = self.file_tree.selection()[0]
@@ -1239,6 +1337,9 @@ class FileManagerGUI:
                     context_menu.add_command(label="Delete", command=lambda: self.delete_item())
                     context_menu.add_command(label="Empty Bin", command=lambda: self.empty_bin())
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
+
+                    context_menu.add_command(label="Properties", command=lambda: self.show_properties(item_path))
+
                 else:
                     context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
                     context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))
@@ -1250,6 +1351,9 @@ class FileManagerGUI:
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
                     context_menu.add_command(label="Upload to Cloud", 
                                             command=lambda: self.upload_to_cloud(item_path))
+
+                    context_menu.add_command(label="Properties", command=lambda: self.show_properties(item_path))
+
                 
                 context_menu.tk_popup(event.x_root, event.y_root)
         else:
@@ -1282,6 +1386,16 @@ class FileManagerGUI:
                 os.listdir(path)
                 # If successful, update current_dir and file list
                 self.current_dir = path
+
+
+                # Update history - truncate forward history if we've gone back and now moving in a new direction
+                if self.history_position < len(self.history) - 1:
+                    self.history = self.history[:self.history_position+1]
+                
+                self.history.append(path)
+                self.history_position = len(self.history) - 1
+
+
                 self.update_file_list()
             except PermissionError:
                 messagebox.showwarning("Access Denied", f"Permission denied for directory:\n{path}")
@@ -1292,11 +1406,26 @@ class FileManagerGUI:
         if self.current_dir == self.bin_dir:
             messagebox.showinfo("Bin Directory","You are currently in the DocuVault Bin.\n\nClick on Home/Desktop to get out of Bin.")
             return
+
+        
         if self.current_dir != os.path.expanduser("~"):
-            self.current_dir = os.path.dirname(self.current_dir)
+            parent_dir = os.path.dirname(self.current_dir)
+            
+            # Update history - truncate forward history if we've gone back and now moving in a new direction
+            if self.history_position < len(self.history) - 1:
+                self.history = self.history[:self.history_position+1]
+            
+            # Add the parent directory to history and update position
+            self.history.append(parent_dir)
+            self.history_position = len(self.history) - 1
+            
+            # Update current directory and refresh the display
+            self.current_dir = parent_dir
+
             self.update_file_list()
         else:
             messagebox.showinfo("Home Directory", "You are already at the home directory.")
+
 
     def go_to_bin(self):
         allow_access(self.bin_dir)
@@ -1383,7 +1512,7 @@ class FileManagerGUI:
         destination = dest_dialog.selected_path
         if destination:
             result = self.file_manager.move_item(items_to_move, destination)
-            print("No of items moved: ", result["success_count"])
+
             if result["success_count"] > 0:
                 messagebox.showinfo("Success", f"Successfully moved {result['success_count']} item(s) to {result['destination']}")
             
@@ -1506,6 +1635,7 @@ class FileManagerGUI:
 
     def show_activity_log(self):
         LogViewer(self.root, self.username)
+
     def sign_out(self, time_out = False):
         if not time_out:
             """Handle sign out process"""
@@ -1565,19 +1695,32 @@ class FileManagerGUI:
         status: 'connected', 'disconnected', 'failed'
         """
         if status == 'connected':
-            self.cloud_status.config(text="💭✅", foreground="green")
+
+            self.cloud_status.config(text="💭✅", foreground="#00ff7f")
             self.connect_cloud_button.config(text="Cloud Connected")
         elif status == 'disconnected':
-            self.cloud_status.config(text="💭", foreground="gray")
+            self.cloud_status.config(text="💭", foreground="#d3d3d3")
             self.connect_cloud_button.config(text="Connect to Cloud")
         elif status == 'failed':
-            self.cloud_status.config(text="💭❌", foreground="red")
+            self.cloud_status.config(text="💭❌", foreground="#ff6b6b")
             self.connect_cloud_button.config(text="Reconnect")
+
+    def open_cloud_website(self):
+        """Open the Nextcloud website in the default browser"""
+        if self.cloud and hasattr(self.cloud, 'server_url'):
+            try:
+                webbrowser.open(self.cloud.server_url)
+                log_action(self.username, 'CLOUD', 'SYSTEM', f"Opened cloud website: {self.cloud.server_url}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to open cloud website: {str(e)}")
+        else:
+            messagebox.showinfo("Cloud Info", "Please connect to cloud first")
 
     def setup_cloud_config(self):
         config_win = tk.Toplevel(self.root)
         config_win.title("Cloud Configuration")
-        config_win.geometry("300x200")
+        config_win.geometry("300x300")
+
 
         entries = [
             ("Server URL", "server_url"),
@@ -1598,6 +1741,9 @@ class FileManagerGUI:
 
             if not url or not user or not password:
                 messagebox.showerror("Error", "Please fill in all fields")
+
+                config_win.destroy()
+
                 return
             self.cloud.store_credentials(
                 server_url=url,
@@ -1613,6 +1759,7 @@ class FileManagerGUI:
         return simpledialog.askstring("Security Check",
                                       "Enter your master password for auto-connecting to cloud:",
                                       show='*')
+
     def show_progress(self, message):
         if self.progress_window and tk.Toplevel.winfo_exists(self.progress_window):
             self.progress_window.destroy()
@@ -1634,7 +1781,9 @@ class FileManagerGUI:
             self.progress_window.after(2000, self.progress_window.destroy)
 
     def delete_cloud_item(self, cloud_path):
-        remote_path = f"/DocuVault/{os.path.basename(cloud_path)}"
+
+        remote_path = f"/{cloud_path[7:]}"
+
         if messagebox.askyesno("Confirm", "Delete from cloud?"):
             self.cloud.delete_file(remote_path)
 
@@ -1650,7 +1799,9 @@ class FileManagerGUI:
 
     def display_cloud_results(self, results):
         if self.search_results_window and tk.Toplevel.winfo_exists(self.search_results_window):
-            self.search_tree.tag_configure(tagname='cloud', foreground='blue')
+
+            self.search_tree.tag_configure(tagname='cloud', foreground='#00bfff')
+
             if not results or len(results) == 0:
                 self.search_tree.insert("", "end",
                                         text="No matching cloud records",
@@ -1664,32 +1815,220 @@ class FileManagerGUI:
                                         tags=('cloud',))
 
     def search_cloud_files(self):
-        search_term = simpledialog.askstring("Cloud Search", "Enter search term:")
-        if search_term:
-            if self.search_results_window and tk.Toplevel.winfo_exists(self.search_results_window):
-                self.search_results_window.destroy()
-            self.search_results_window = tk.Toplevel(self.root)
-            self.search_results_window.title("Cloud Search Results")
-            self.search_results_window.geometry("600x400")
-            self.search_tree = ttk.Treeview(self.search_results_window)
-            self.search_tree.pack(expand=True, fill=tk.BOTH)
-            self.search_tree["columns"] = ("path",)
-            self.search_tree.column("#0", width=200, minwidth=200)
-            self.search_tree.column("path", width=400, minwidth=200)
-            self.search_tree.heading("#0", text="Name")
-            self.search_tree.heading("path", text="Path")
-            self.search_tree.bind("<Button-3>", self.show_search_context_menu)
-            self.search_tree.bind("<Control-1>", self.show_search_context_menu)  # For macOS
-            self.search_tree.bind("<Double-1>", self.on_search_double_click)
-            if self.cloud and self.cloud.nc:
-                self.cloud.search_files(search_term, callback=self.display_cloud_results)
-            else:
-                messagebox.showinfo("Cloud Search", "Please connect to cloud first")
-                self.search_results_window.destroy()
+        """Advanced cloud search with filtering options"""
+        # Check if cloud is connected
+        if not self.cloud or not self.cloud.nc:
+            messagebox.showinfo("Cloud Search", "Please connect to cloud first")
+            return
+            
+        # Create/reuse search results window
+        if self.search_results_window and tk.Toplevel.winfo_exists(self.search_results_window):
+            self.search_results_window.destroy()
+            
+        self.search_results_window = tk.Toplevel(self.root)
+        self.search_results_window.title("Cloud Search")
+        self.search_results_window.geometry("800x600")
+        
+        # Create search frame at top
+        search_frame = ttk.Frame(self.search_results_window, padding=10)
+        search_frame.pack(fill=tk.X, side=tk.TOP)
+        
+        # Search bar
+        ttk.Label(search_frame, text="Search:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.search_entry = ttk.Entry(search_frame, width=40)
+        self.search_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+        search_button = ttk.Button(search_frame, text="Search", command=self.perform_cloud_search)
+        search_button.grid(row=0, column=2, padx=5, pady=5)
+        
+        # Filter options frame
+        filter_frame = ttk.LabelFrame(self.search_results_window, text="Filter Options", padding=10)
+        filter_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # File type filter
+        ttk.Label(filter_frame, text="File Type:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.file_type_var = tk.StringVar()
+        file_types = ["All Files", "Documents (.txt, .pdf, .doc, .ppt)", "Images (.jpg, .png, .gif)", "Videos (.mp4, .avi, .mov)", "Audio (.mp3, .wav)"]
+        file_type_combo = ttk.Combobox(filter_frame, textvariable=self.file_type_var, values=file_types, width=25, state='readonly')
+        file_type_combo.current(0)
+        file_type_combo.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+        
+        # Reset filters button
+        reset_button = ttk.Button(filter_frame, text="Reset Filters", command=self.reset_cloud_search_filters)
+        reset_button.grid(row=0, column=2, padx=5, pady=5)
+        
+        # Create the search results treeview
+        results_frame = ttk.Frame(self.search_results_window)
+        results_frame.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
+        
+        # Add a label for results count
+        self.results_count_label = ttk.Label(results_frame, text="Results: 0 items found")
+        self.results_count_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        # Create treeview with scrollbars
+        self.search_tree = ttk.Treeview(results_frame)
+        self.search_tree.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
+        
+        # Add vertical scrollbar
+        vsb = ttk.Scrollbar(results_frame, orient="vertical", command=self.search_tree.yview)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.search_tree.configure(yscrollcommand=vsb.set)
+        
+        # Configure treeview columns
+        self.search_tree["columns"] = ("name", "path", "type", "size", "modified")
+        self.search_tree.column("#0", width=40, minwidth=40)  # Icon column
+        self.search_tree.column("name", width=200, minwidth=100)
+        self.search_tree.column("path", width=300, minwidth=100)
+        self.search_tree.column("type", width=100, minwidth=80)
+        self.search_tree.column("size", width=100, minwidth=80)
+        self.search_tree.column("modified", width=150, minwidth=100)
+        
+        self.search_tree.heading("#0", text="")
+        self.search_tree.heading("name", text="Name")
+        self.search_tree.heading("path", text="Path")
+        self.search_tree.heading("type", text="Type")
+        self.search_tree.heading("size", text="Size")
+        self.search_tree.heading("modified", text="Date Modified")
+        
+        # Bind events
+        self.search_tree.bind("<Double-1>", self.on_search_double_click)
+        self.search_tree.bind("<Button-3>", self.show_search_context_menu)
+        self.search_tree.bind("<Button-2>", self.show_search_context_menu)  # For macOS
+        self.search_entry.bind("<Return>", lambda e: self.perform_cloud_search())
+        
+        # Add status bar
+        status_bar = ttk.Frame(self.search_results_window)
+        status_bar.pack(fill=tk.X, side=tk.BOTTOM, pady=2)
+        self.search_status = ttk.Label(status_bar, text="Search for files in cloud...")
+        self.search_status.pack(side=tk.LEFT, padx=10)
+        
+        # Set focus to search entry
+        self.search_entry.focus_set()
+        
+        # Initialize tag
+        self.search_tree.tag_configure('cloud', foreground='#00bfff')
+
+    def perform_cloud_search(self):
+        """Execute cloud search with current filters"""
+        search_term = self.search_entry.get()
+        if not search_term:
+            messagebox.showinfo("Search", "Please enter a search term")
+            return
+        
+        # Clear previous results
+        for item in self.search_tree.get_children():
+            self.search_tree.delete(item)
+        
+        # Update status
+        self.search_status.config(text="Searching cloud...")
+        self.search_results_window.update_idletasks()
+        
+        # Get file type filter
+        file_type = self.file_type_var.get()
+        
+        # Convert file type filter to extensions
+        extensions = []
+        if file_type == "Documents (.txt, .pdf, .doc, .ppt)":
+            extensions = ['.txt', '.pdf', '.doc', '.docx', '.rtf', '.odt', '.ppt', '.pptx', '.xls', '.xlsx']
+        elif file_type == "Images (.jpg, .png, .gif)":
+            extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff']
+        elif file_type == "Videos (.mp4, .avi, .mov)":
+            extensions = ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv']
+        elif file_type == "Audio (.mp3, .wav)":
+            extensions = ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma']
+        
+        # Initiate cloud search using the backend function from cloud.py
+        if self.cloud and self.cloud.nc:
+            self.cloud.search_files(search_term, callback=lambda results: self.display_cloud_results(results, extensions))
+        else:
+            messagebox.showinfo("Cloud Search", "Please connect to cloud first")
+            self.search_status.config(text="Search failed: Not connected to cloud")
+
+    def reset_cloud_search_filters(self):
+        """Reset all cloud search filters to defaults"""
+        self.file_type_var.set("All Files")
+        self.search_entry.delete(0, tk.END)
+        
+        # Clear results
+        for item in self.search_tree.get_children():
+            self.search_tree.delete(item)
+        self.results_count_label.config(text="Results: 0 items found")
+        self.search_status.config(text="Filters reset")
+
+    def display_cloud_results(self, results, extensions=None):
+        """Display cloud search results in the treeview with filtering"""
+        if self.search_results_window and tk.Toplevel.winfo_exists(self.search_results_window):
+            self.search_tree.tag_configure('cloud', foreground='#00bfff')
+            
+            if not results or len(results) == 0:
+                self.search_tree.insert("", "end", 
+                                    text="",
+                                    values=("No matching cloud records", "", "", "", ""),
+                                    tags=('cloud',))
+                self.results_count_label.config(text="Results: 0 items found")
+                self.search_status.config(text="No matching files found in cloud")
+                return
+            
+            filtered_count = 0
+            
+            for item in results:
+                # Apply file type filter if extensions are specified
+                if extensions:
+                    file_ext = os.path.splitext(item.name)[1].lower()
+                    if file_ext not in extensions and extensions:
+                        continue
+                
+                filtered_count += 1
+                
+                # Determine file type and icon
+                file_ext = os.path.splitext(item.name)[1].lower()
+                if file_ext in ['.txt', '.pdf', '.doc', '.docx', '.rtf']:
+                    item_type = f"Document ({file_ext})"
+                    icon = "📄"
+                elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+                    item_type = f"Image ({file_ext})"
+                    icon = "🖼️"
+                elif file_ext in ['.mp4', '.avi', '.mov', '.mkv']:
+                    item_type = f"Video ({file_ext})"
+                    icon = "🎬"
+                elif file_ext in ['.mp3', '.wav', '.ogg', '.flac']:
+                    item_type = f"Audio ({file_ext})"
+                    icon = "🎵"
+                else:
+                    item_type = f"File ({file_ext})"
+                    icon = "📄"
+                
+                # Get size and date if available
+                size_str = "Unknown"
+                date_str = "Unknown"
+                
+                if hasattr(item, 'size') and item.size:
+                    size_bytes = int(item.size)
+                    if size_bytes < 1024:
+                        size_str = f"{size_bytes} B"
+                    elif size_bytes < 1024*1024:
+                        size_str = f"{size_bytes/1024:.1f} KB"
+                    elif size_bytes < 1024*1024*1024:
+                        size_str = f"{size_bytes/(1024*1024):.1f} MB"
+                    else:
+                        size_str = f"{size_bytes/(1024*1024*1024):.1f} GB"
+                
+                if hasattr(item, 'modified') and item.modified:
+                    date_str = item.modified
+                
+                self.search_tree.insert("", "end", 
+                                    text=icon,
+                                    values=(item.name, f"Cloud: {item.user_path}", item_type, size_str, date_str),
+                                    tags=('cloud',))
+            
+            # Update results count and status
+            self.results_count_label.config(text=f"Results: {filtered_count} items found")
+            self.search_status.config(text="Search completed")
+
 
     def download_cloud_item(self, cloud_path):
         filename = os.path.basename(cloud_path)
-        remote_path = f"/DocuVault/{filename}"
+        remote_path = f"/{cloud_path[7:]}"
+
         dest_dialog = CustomDirectoryDialog(self.root, self.current_dir)
         self.root.wait_window(dest_dialog)
         if dest_dialog.selected_path:
@@ -1743,5 +2082,305 @@ class FileManagerGUI:
         else:
             messagebox.showinfo("Cloud Upload", "Please connect to cloud first")
 
+# <<<<<<< main-2
+#     def run(self):
+#         self.root.mainloop()
+# =======
+    def share_cloud_item(self, cloud_path):
+            """
+            GUI method to collect sharing options and call CloudManager's backend function.
+            """
+            from datetime import datetime, timedelta
+
+            # Create popup window for sharing options
+            options_window = tk.Toplevel(self.root)
+            options_window.title("Share Options")
+            options_window.geometry("350x300")
+            options_window.transient(self.root)
+            options_window.grab_set()
+
+            main_frame = ttk.Frame(options_window, padding=10)
+            main_frame.pack(fill=tk.BOTH, expand=True)
+
+            # Expiry date section
+            expiry_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(main_frame, text="Set expiration date", variable=expiry_var).pack(anchor=tk.W, pady=(0, 5))
+
+            expiry_frame = ttk.Frame(main_frame)
+            expiry_frame.pack(fill=tk.X, pady=(0, 10))
+            ttk.Label(expiry_frame, text="Days until expiration:").pack(side=tk.LEFT)
+            expiry_days = ttk.Spinbox(expiry_frame, from_=1, to=365, width=5)
+            expiry_days.pack(side=tk.LEFT)
+
+            # Password protection section
+            password_var = tk.BooleanVar(value=False)
+            ttk.Checkbutton(main_frame, text="Password protect", variable=password_var).pack(anchor=tk.W, pady=(0, 5))
+
+            password_frame = ttk.Frame(main_frame)
+            password_frame.pack(fill=tk.X, pady=(0, 10))
+            ttk.Label(password_frame, text="Password:").pack(side=tk.LEFT)
+            password_entry = ttk.Entry(password_frame, show="*", width=20)
+            password_entry.pack(side=tk.LEFT)
+
+            # Permissions section
+            ttk.Label(main_frame, text="Permissions:").pack(anchor=tk.W, pady=(0, 5))
+            perm_var = tk.StringVar(value="read-only")
+            perm_dropdown = ttk.Combobox(main_frame, textvariable=perm_var,
+                                        values=["read-only", "read-write"], state="readonly")
+            perm_dropdown.pack(fill=tk.X)
+
+            def on_share():
+                # Validate inputs and call backend function
+                try:
+                    permissions = 1 if perm_var.get() == "read-only" else 3
+                    password = password_entry.get() if password_var.get() else None
+                    expire_date = None
+
+                    if expiry_var.get():
+                        expire_date = datetime.now() + timedelta(days=int(expiry_days.get()))
+
+                    remote_path = f"/{cloud_path[7:]}"
+                    share_url = self.cloud.share_task(remote_path, permissions=permissions,
+                                                    password=password, expire_date=expire_date)
+
+                    if share_url:
+                        messagebox.showinfo("Share Link", f"Share link copied to clipboard:\n{share_url}")
+                        self.root.clipboard_clear()
+                        self.root.clipboard_append(share_url)
+
+                    options_window.destroy()
+
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to create share link: {str(e)}")
+
+            def on_cancel():
+                options_window.destroy()
+
+            # Buttons
+            button_frame = ttk.Frame(main_frame)
+            button_frame.pack(fill=tk.X)
+            
+            ttk.Button(button_frame, text="Cancel", command=on_cancel).pack(side=tk.RIGHT, padx=5, pady=10)
+            ttk.Button(button_frame, text="Share", command=on_share).pack(side=tk.RIGHT, padx=5, pady=10)
+
     def run(self):
         self.root.mainloop()
+
+    #################################################
+    # GEMINI AI ASSISTANT
+    #################################################
+
+    def gemini_AI_assist(self):
+        # Create a new toplevel window for the chat interface
+        chat_window = tk.Toplevel(self.root)
+        chat_window.title("DocuVault AI Assistant")
+        chat_window.geometry("420x600")
+        
+        # Create a frame for the chat history
+        chat_frame = ttk.Frame(chat_window)
+        chat_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Create a canvas with scrollbar for the chat history
+        chat_canvas = tk.Canvas(chat_frame)
+        scrollbar = ttk.Scrollbar(chat_frame, orient="vertical", command=chat_canvas.yview)
+        scrollable_frame = ttk.Frame(chat_canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: chat_canvas.configure(scrollregion=chat_canvas.bbox("all"))
+        )
+        
+        chat_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        chat_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        chat_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Create a frame for the input area
+        input_frame = ttk.Frame(chat_window)
+        input_frame.pack(fill=tk.X, side=tk.BOTTOM, padx=10, pady=10)
+        
+        style = ttk.Style()
+        style.configure("TFrame", background="#2a2a2a", foreground="#ffffff")
+
+        # Create an entry widget for user input
+        user_input = ttk.Entry(input_frame)
+        user_input.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        user_input.focus_set()
+        
+        # Chat history to keep track of the conversation
+        chat_history = []
+        
+        # Function to add a message to the chat display
+        def add_message(sender, message, is_user=False):
+            # Create a frame for the message
+            msg_frame = ttk.Frame(scrollable_frame)
+            msg_frame.pack(fill=tk.X, pady=5, padx=5, anchor="e" if is_user else "w")
+            
+            # Create a label for the sender
+            sender_label = ttk.Label(msg_frame, text=sender, font=("Arial", 9, "bold"), background="#2a2a2a", foreground="#ffffff")
+            sender_label.pack(anchor="e" if is_user else "w")
+            
+            # Create a label for the message with a different background
+            style = ttk.Style()
+            style.configure("User.TLabel", background="#008100", wraplength=300, padding=5)
+            style.configure("Assistant.TLabel", background="#444444", wraplength=300, padding=5)
+            
+            msg_label = ttk.Label(
+                msg_frame, 
+                text=message, 
+                style="User.TLabel" if is_user else "Assistant.TLabel",
+                wraplength=350
+            )
+            msg_label.pack(anchor="e" if is_user else "w", pady=(2, 0))
+            
+            # Scroll to the bottom to show the latest message
+            chat_canvas.update_idletasks()
+            chat_canvas.yview_moveto(1.0)
+        
+        # Function to send a message
+        def send_message(event=None):
+            message = user_input.get().strip()
+            if not message:
+                return
+            
+            # Add user message to the chat
+            add_message("You", message, is_user=True)
+            chat_history.append({'role': 'user', 'content': message})
+            
+            # Clear the input field
+            user_input.delete(0, tk.END)
+            
+            # Send request to the Gemini API
+            try:
+                response = requests.post(
+                    'http://10.145.65.74:8003/chat',
+                    json=chat_history,
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    assistant_response = response.json()['response']
+                    add_message("DocuVault AI", assistant_response)
+                    chat_history.append({'role': 'assistant', 'content': assistant_response})
+                else:
+                    add_message("System", "Failed to communicate with the AI service. Please try again.")
+            except requests.exceptions.RequestException:
+                add_message("System", "Error connecting to the AI service. Make sure the server is running.")
+        
+        # Bind the Enter key to send a message
+        user_input.bind("<Return>", send_message)
+        
+        # Create a send button
+        send_button = ttk.Button(input_frame, text="⬆️Send", command=send_message)
+        send_button.pack(side=tk.RIGHT)
+        
+        # Send an initial greeting
+        initial_greeting = "Hello! I'm your DocuVault AI assistant. I can help you learn about the features of DocuVault, answer questions about file management, automation, and more. How can I assist you today?"
+        add_message("DocuVault AI", initial_greeting)
+        chat_history.append({'role': 'assistant', 'content': initial_greeting})
+
+    ###################################
+    # New Features
+    ###################################
+    def show_properties(self, item_path):
+        # Create properties window
+        prop_window = tk.Toplevel(self.root)
+        prop_window.title(f"Properties: {os.path.basename(item_path)}")
+        prop_window.geometry("400x400")
+        prop_window.resizable(False, False)
+        
+        # Apply theme to prop_window
+        try:
+            prop_window.tk.call("source", "azure.tcl")
+            prop_window.tk.call("set_theme", "dark")
+        except tk.TclError:
+            pass
+
+        # Get file/folder info
+        try:
+            stat_info = os.stat(item_path)
+            is_dir = os.path.isdir(item_path)
+
+            # Basic info
+            info_frame = ttk.Frame(prop_window)
+            info_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+            # Name
+            ttk.Label(info_frame, text="Name:", anchor="w").grid(row=0, column=0, sticky="w", padx=5, pady=5)
+            ttk.Label(info_frame, text=os.path.basename(item_path), anchor="w").grid(row=0, column=1, sticky="w", padx=5, pady=5)
+
+            # Type
+            file_type = "Folder" if is_dir else os.path.splitext(item_path)[1] or "File"
+            ttk.Label(info_frame, text="Type:", anchor="w").grid(row=1, column=0, sticky="w", padx=5, pady=5)
+            ttk.Label(info_frame, text=file_type, anchor="w").grid(row=1, column=1, sticky="w", padx=5, pady=5)
+
+            # Location
+            ttk.Label(info_frame, text="Location:", anchor="w").grid(row=2, column=0, sticky="w", padx=5, pady=5)
+            ttk.Label(info_frame, text=os.path.dirname(item_path), anchor="w").grid(row=2, column=1, sticky="w", padx=5, pady=5)
+
+            # Size
+            size_text = ""
+            if is_dir:
+                size_text = self.get_folder_size(item_path)
+            else:
+                size_text = self.get_size_format(stat_info.st_size)
+            ttk.Label(info_frame, text="Size:", anchor="w").grid(row=3, column=0, sticky="w", padx=5, pady=5)
+            ttk.Label(info_frame, text=size_text, anchor="w").grid(row=3, column=1, sticky="w", padx=5, pady=5)
+
+            # Created
+            created = datetime.fromtimestamp(stat_info.st_ctime).strftime('%Y-%m-%d %H:%M:%S')
+            ttk.Label(info_frame, text="Created:", anchor="w").grid(row=4, column=0, sticky="w", padx=5, pady=5)
+            ttk.Label(info_frame, text=created, anchor="w").grid(row=4, column=1, sticky="w", padx=5, pady=5)
+
+            # Modified
+            modified = datetime.fromtimestamp(stat_info.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            ttk.Label(info_frame, text="Modified:", anchor="w").grid(row=5, column=0, sticky="w", padx=5, pady=5)
+            ttk.Label(info_frame, text=modified, anchor="w").grid(row=5, column=1, sticky="w", padx=5, pady=5)
+
+            # Close button
+            ttk.Button(prop_window, text="Close", command=prop_window.destroy).pack(pady=10)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Error getting properties: {str(e)}")
+            prop_window.destroy()
+            
+    def get_folder_size(self, folder_path):
+        total_size = 0
+        for dirpath, dirnames, filenames in os.walk(folder_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                # skip if it is symbolic link
+                if not os.path.islink(fp):
+                    try:
+                        total_size += os.path.getsize(fp)
+                    except:
+                        pass
+        return self.get_size_format(total_size)
+        
+    def get_size_format(self, size):
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size < 1024.0:
+                return f"{size:.2f} {unit}"
+            size /= 1024.0
+        return f"{size:.2f} TB"
+
+    def go_back(self):
+        """Navigate backward in the directory history"""
+        if self.history_position > 0:
+            self.history_position -= 1
+            self.current_dir = self.history[self.history_position]
+            self.update_file_list()
+        else:
+            messagebox.showinfo("Info", "No previous directory in history.")
+
+    def go_forward(self):
+        """Navigate forward in the directory history"""
+        if self.history_position < len(self.history) - 1:
+            self.history_position += 1
+            self.current_dir = self.history[self.history_position]
+            self.update_file_list()
+        else:
+            messagebox.showinfo("Info", "No next directory in history.")
+
+    

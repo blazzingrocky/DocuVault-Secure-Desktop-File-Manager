@@ -6,7 +6,9 @@ import time
 import sqlite3
 import subprocess
 import json
+
 from database2 import log_action,log_file_operation
+
 from tkinter import messagebox
 from datetime import datetime, timedelta
 
@@ -16,7 +18,9 @@ def remove_readonly(func, path, _):
         os.chmod(path, stat.S_IWRITE) # Remove read-only flag
         func(path)
     except Exception as e:
-        print(f"Error removing read-only attribute: {e}")
+
+        messagebox.showerror("Error", f"Error removing read-only attribute: {e}")
+
 
 def restrict_access(path):
     """Restrict all access permissions to the specified file or directory."""
@@ -24,7 +28,9 @@ def restrict_access(path):
         # Use oschmod instead of os.chmod for cross-platform compatibility
         oschmod.set_mode(path, 0o000) # No permissions for anyone
     except Exception as e:
-        print(f"Error restricting access: {e}")
+
+        messagebox.showerror("Error", f"Error restricting access: {e}")
+
 
 def allow_access(path):
     """Allow all access permissions to the specified file or directory."""
@@ -32,7 +38,9 @@ def allow_access(path):
         # Use oschmod instead of os.chmod for cross-platform compatibility
         oschmod.set_mode(path, 0o755) # rwx for owner, rx for group and others
     except Exception as e:
-        print(f"Error allowing access: {e}")
+
+        messagebox.showerror("Error", f"Error allowing access: {e}")
+
 
 class FileManager:
     def __init__(self, username, bin_dir,archive_dir):
@@ -40,7 +48,9 @@ class FileManager:
         self.bin_dir = bin_dir
         self.archive_dir = archive_dir
         self.automation_folder = self.get_automation_folder(username)
+
         self.db_connection = sqlite3.connect('filemanager.db', timeout=30.0)
+
 
 
     def get_automation_folder(self, username):
@@ -156,7 +166,9 @@ class FileManager:
                     try:
                         # Check if file is older than archive_age days and has valid extension
                         # file_ext = os.path.splitext(file_path)[1].lower().strip('.')
-                        if (current_time - os.path.getmtime(file_path) > archive_age and 
+
+                        if (current_time - os.path.getmtime(file_path) > archive_age*3600*24 and 
+
                             any(file_path.split('.')[-1] for each in list_of_extensions)):
                             confirm=messagebox.askyesno("Confirm Archive", f"Are you sure you want to archive {file}?")
                             if confirm:
@@ -314,29 +326,7 @@ class FileManager:
         
         return results
 
-    # def rename_item(self, item_path, new_name):
-    #     """Rename a file or folder"""
-    #     try:
-    #         item_type = 'file' if os.path.isfile(item_path) else 'folder'
-    #         new_path = os.path.join(os.path.dirname(item_path), new_name)
-            
-    #         # Check if destination already exists
-    #         if os.path.exists(new_path):
-    #             confirm = messagebox.askyesno("Confirm Overwrite",
-    #                                          f"'{new_name}' already exists. Overwrite?")
-    #             if confirm:
-    #                 if item_type == 'file':
-    #                     os.remove(new_path)
-    #                 elif item_type == 'folder':
-    #                     shutil.rmtree(new_path, onexc=remove_readonly)
-    #             else:
-    #                 return True, item_path
-    #         res=new_path    
-    #         os.rename(item_path, new_path)
-    #         log_action(self.username, 'RENAME', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} â†’ {new_path}")
-    #         return True, res
-    #     except Exception as e:
-    #         return False, f"Could not rename item: {e}"
+
     def rename_item(self, item_path, new_name):
         """Rename a file or folder"""
         try:
@@ -345,8 +335,10 @@ class FileManager:
             
             # Check if destination already exists
             if os.path.exists(new_path):
-                confirm = messagebox.askyesno("Confirm Overwrite", 
-                    f"'{new_name}' already exists. Overwrite?")
+
+                confirm = messagebox.askyesno("Confirm Overwrite",
+                                             f"'{new_name}' already exists. Overwrite?")
+
                 if confirm:
                     if item_type == 'file':
                         os.remove(new_path)
@@ -354,45 +346,13 @@ class FileManager:
                         shutil.rmtree(new_path, onexc=remove_readonly)
                 else:
                     return True, item_path
-    
+
+                    
             os.rename(item_path, new_path)
-            log_action(self.username, 'RENAME', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} → {new_path}")
+            log_action(self.username, 'RENAME', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} â†’ {new_path}")
             return True, new_path
         except Exception as e:
             return False, f"Could not rename item: {e}"
-    # def rename_item(self, old_path, new_name):
-    #     """Rename a file or folder."""
-    #     try:
-    #         # Get directory and new path
-    #         directory = os.path.dirname(old_path)
-    #         new_path = os.path.join(directory, new_name)
-            
-    #         # Check if target already exists
-    #         if os.path.exists(new_path):
-    #             # Handle existing file case
-    #             return True, old_path
-            
-    #         # Begin transaction with IMMEDIATE flag to acquire lock right away
-    #         self.db_connection.execute("BEGIN IMMEDIATE TRANSACTION")
-            
-    #         # Rename the file
-    #         os.rename(old_path, new_path)
-            
-    #         # Log the action in database
-    #         cursor = self.db_connection.cursor()
-    #         cursor.execute(
-    #             "INSERT INTO logs (action, old_path, new_path, timestamp) VALUES (?, ?, ?, ?)",
-    #             ("rename", old_path, new_path, datetime.now().isoformat())
-    #         )
-            
-    #         # Commit the transaction
-    #         self.db_connection.commit()
-            
-    #         return True, new_path
-    #     except Exception as e:
-    #         # Rollback in case of error
-    #         self.db_connection.rollback()
-    #         return False, f"Could not rename item: {str(e)}"
 
 
     def get_available_apps(self, file_path):
@@ -577,7 +537,11 @@ class FileManager:
             if self.automation_folder and os.path.normpath(item_path) == os.path.normpath(self.automation_folder):
                 skipped_items.append(f"{os.path.basename(item_path)} (automation folder)")
                 continue
-                
+            
+            if self.bin_dir and os.path.normpath(item_path) == os.path.normpath(self.bin_dir):
+                skipped_items.append(f"{os.path.basename(item_path)} (bin folder)")
+                continue
+
             try:
                 if permanently:
                     # Permanent deletion
@@ -608,7 +572,7 @@ class FileManager:
                     restrict_access(self.bin_dir)
                     # Log action
                     log_action(self.username, 'DELETE', 'FILE' if item_type == 'file' else 'FOLDER',
-                              f"{item_path} â†’ {dest_path}", "Move to Bin")
+                              f"{item_path} -> {dest_path}", "Move to Bin")
                     
                 success_count += 1
                 
@@ -636,7 +600,8 @@ class FileManager:
         dest_norm = os.path.normpath(destination)
         
         # Track success and failure
-        count = 0
+        success_count = 0
+
         failed_items = []
         skipped_items = []
         
@@ -651,7 +616,9 @@ class FileManager:
             try:
                 base_name = os.path.basename(item_path)
                 dest_path = os.path.join(destination, base_name)
-                item_type = 'file' if os.path.isfile(dest_path) else 'folder'
+
+                item_type = 'file' if os.path.isfile(item_path) else 'folder'
+
                 
                 # Handle file conflicts
                 if os.path.exists(dest_path):
@@ -683,9 +650,13 @@ class FileManager:
                         shutil.rmtree(dest_path, onexc=remove_readonly)
                         
                 # Perform the move
-                count += 1
+
                 shutil.move(item_path, destination)
-                log_action(self.username, 'MOVE', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} â†’ {destination}")
+                success_count += 1
+
+                log_action(self.username, 'MOVE', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} -> {destination}")
+                
+
                 
             except Exception as e:
                 failed_items.append(f"{os.path.basename(item_path)}: {str(e)}")
@@ -695,7 +666,7 @@ class FileManager:
             delattr(self, '_overwrite_all')
             
         return {
-            "success_count": count,
+            "success_count": success_count,
             "failed_items": failed_items,
             "skipped_items": skipped_items,
             "total": len(items),
@@ -725,14 +696,19 @@ class FileManager:
                         counter += 1
                         
                 # Perform the copy
-                success_count += 1
+
+
                 if os.path.isfile(item_path):
                     shutil.copy2(item_path, dest_path)
                 elif os.path.isdir(item_path):
                     shutil.copytree(item_path, dest_path)
-                    
+                success_count += 1
+            
                 item_type = 'file' if os.path.isfile(item_path) else 'folder'
-                log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} copyâ†’ {dest_path}")
+
+                log_action(self.username, 'COPY', 'FILE' if item_type == 'file' else 'FOLDER', f"{item_path} copy-> {dest_path}")
+                
+
                 
             except Exception as e:
                 failed_items.append(f"{os.path.basename(item_path)}: {str(e)}")
@@ -831,9 +807,9 @@ class FileManager:
                         
                 # Perform restore operation
                 shutil.move(item_path, destination)
-                item_type = 'file' if os.path.isfile(dest_path) else 'folder'
-                log_action(self.username, 'RESTORE', 'FILE' if item_type=='file' else 'FOLDER', f"{item_path} â†’ {destination}")
                 success_count += 1
+                item_type = 'file' if os.path.isfile(dest_path) else 'folder'
+                log_action(self.username, 'RESTORE', 'FILE' if item_type=='file' else 'FOLDER', f"{item_path} -> {destination}")
                 
             except Exception as e:
                 failed_items.append(f"{base_name}: {str(e)}")

@@ -309,3 +309,9 @@ class FileEncryptor:
             'decrypted': decrypted_files,
             'failed': failed_files
         }
+
+
+    def is_file_encrypted(self, file_path):
+        """Check if a file is already encrypted"""
+        return file_path.endswith(".enc")
+

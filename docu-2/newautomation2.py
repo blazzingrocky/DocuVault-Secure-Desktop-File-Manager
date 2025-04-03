@@ -603,7 +603,9 @@ class AutomationWindow(tk.Toplevel):
                                           command=lambda: self.classify_and_upload(item_path))
                 context_menu.add_separator()
 
-                if self.is_encrypted(item_path):
+
+
+                if self.encryptor.is_file_encrypted(item_path):
                     context_menu.add_command(label="Decrypt", command=self.decrypt_selected_files)
                 else:
                     context_menu.add_command(label="Encrypt", command=self.encrypt_selected_files)
