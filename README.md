@@ -1,111 +1,183 @@
 # DocuVault: Secure Desktop File Manager
-DocuVault: Secure Desktop File Manager Project
-DocuVault is a comprehensive file management application built in Python that offers secure document management capabilities beyond basic file browsing. The project implements a feature-rich GUI interface with advanced functionality for managing, organizing, and securing files.
+DocuVault is a comprehensive desktop file management solution built with Python and Tkinter that provides advanced file organization, security, and automation features for efficient document handling.
+# Features
+Core File Management
+Basic Operations: Copy, move, delete, and rename files and folders with intuitive interface
 
-Core Components
-The implementation consists of two primary files:
+Recycle Bin: Safely delete files with the ability to restore them later
 
-gui2.py: Contains the graphical user interface elements built with Tkinter
+Archive System: Automatically archive old files based on customizable age thresholds
 
-newfilemanager2.py: Provides the core file system operations and business logic
+Search Functionality: Powerful search with filters for file type, date, and size
 
-Key Features
-File Operations
+Sort Options: Organize files by name, date, or size with a single click
 
-Complete file management capabilities (create, delete, copy, move, rename)
+# Security
+User Authentication: Secure login system with username and password protection
 
-Context menu with operation options for files and directories
+File Encryption: Built-in AES-256-GCM encryption for sensitive files
 
-Sorting options by name, date, and size
+Activity Logging: Comprehensive logging of all file operations for accountability
 
-Security Features
+Auto-logout: Automatic session termination after period of inactivity
 
-User authentication system with password protection
+# Automation
+AI-Powered Classification: Automatically categorize files based on content analysis
 
-Permission management for sensitive directories
+Scheduled Backups: Configure automatic backups of frequently accessed files
 
-Account management with deletion capability
+File Monitoring: Track file access patterns to optimize organization
 
-Activity logging of all file operations
+Auto-archiving: Set custom thresholds for moving older files to archive
 
-Advanced File Management
+# Cloud Integration
+Nextcloud Support: Connect to Nextcloud for remote file storage
 
-Two-tier deletion system with Recycle Bin functionality
+Cloud Search: Search files stored in the cloud from within the application
 
-Archive system for older files with configurable age thresholds
+Synchronization: Keep local and cloud files in sync
 
-Advanced search functionality with multiple filters (type, date, size)
+File Sharing: Share cloud-stored files directly from the interface
 
-Dashboard and Analytics
+# User Interface
+Modern Design: Clean, intuitive interface with light and dark themes
 
-File statistics visualization with charts
+File Preview: Built-in preview for common file types
 
-File type distribution analysis
+Dashboard: Visual overview of storage usage and file distribution
 
-Activity logs viewer
+Context Menus: Right-click functionality for quick access to common operations
 
-Cloud Integration
+# Advanced Features
+Multi-select Operations: Perform actions on multiple files simultaneously
 
-Connection to cloud storage (appears to be Nextcloud)
+Drag and Drop: Intuitive file movement between folders
 
-Upload/download capabilities
+Custom Filters: Save and apply custom search filters
 
-Cloud search functionality
+Path Navigation: Breadcrumb-style navigation for easy directory traversal
 
-Automatic backup of frequently accessed files
+Account Management: User profile settings and account deletion options
 
-Automation
+ChatBot: Provides user assistance
 
-Scheduled tasks for archiving and backups
+# Installation
 
-Background file operations
+# Prerequisites
+Python 3.7 or higher
 
-Tracking of frequently accessed files
+# Required Python packages (install via pip):
 
-Technical Implementation Details
-User Interface
+text
+pip install tkinter pillow pycryptodome schedule requests
 
-Built with Tkinter and ttk for a native look and feel
+# Setup
+Clone the repository:
 
-Multiple views including file browser, dashboard, and settings panels
+text
+git clone https://github.com/yourusername/docuvault.git
+cd docuvault
 
-Tree-based file navigation with scrolling support
+# Run the application:
 
-File System Operations
+text
+python main.py
+On first run, create a new account to get started.
 
-Cross-platform file permission handling using oschmod
+# Usage
+Getting Started
+Login/Register: Create an account or log in with existing credentials
 
-Comprehensive error handling for all operations
+Navigation: Use the toolbar buttons to navigate between directories
 
-Support for multiple selection of files and folders
+File Operations: Right-click on files or use the toolbar for common operations
 
-Database Integration
+Dashboard: View file statistics and storage usage at a glance
 
-SQLite database for user management and activity logging
+# Automation Setup
+1. Go to Settings → Automation
 
-Transaction handling for file operations
+2. Configure the automation folder location
 
-Visualization
+3. Enable AI classification for document and image sorting
 
-Matplotlib integration for file type distribution charts
+4. Set up auto-archiving preferences for older files
 
-Plotly visualization capabilities
+# Encryption
+1. Select files you want to encrypt
 
-Background Processing
+2. Click the "Encrypt Files" button
 
-Threading for non-blocking UI during operations
+3. Set a master password for encryption/decryption
 
-Scheduled background tasks using the schedule library
+4. Access encrypted files with password verification
 
-Security Considerations
-The application implements several security measures:
+# Cloud Setup
+Go to Settings → Cloud Setup
 
-Restricted access to sensitive folders like the Bin directory
+Enter your Nextcloud server URL and credentials
 
-Permission controls for file operations
+Use the cloud buttons to synchronize and manage remote files
 
-Detailed activity logging for audit purposes
+Search cloud storage directly from the main interface
 
-Password verification for sensitive operations like account deletion
+# Project Structure
+main.py: Application entry point
 
-DocuVault appears to be designed as a secure document management system that combines conventional file management with added security, organization, and cloud capabilities.
+login.py: User authentication system
+
+gui2.py: Main file manager interface
+
+newfilemanager2.py: Core file operations implementation
+
+newautomation2.py: Automation and AI classification features
+
+encryption_2.py: File encryption/decryption functionality
+
+database.py: SQLite database management
+
+cloud.py: Cloud storage integration
+
+dashboard.py: Analytics and statistics visualization
+
+utility.py: Helper functions and custom dialogs
+
+# Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+Fork the repository
+
+Create your feature branch (git checkout -b feature/amazing-feature)
+
+Commit your changes (git commit -m 'Add some amazing feature')
+
+Push to the branch (git push origin feature/amazing-feature)
+
+Open a Pull Request
+
+License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+Acknowledgments
+The Tkinter library for providing the GUI framework
+
+PyCryptodome for encryption capabilities
+
+The open-source community for various libraries and inspiration
+
+Azure theme for the modern UI appearance
+
+# Future Development
+Mobile companion app for remote access
+
+Additional cloud storage providers (Google Drive, Dropbox)
+
+Enhanced AI capabilities for document analysis and tagging
+
+Cross-platform compatibility improvements
+
+Collaborative editing features
+
+Version control for important documents
+
+Extended file preview capabilities
