@@ -50,24 +50,6 @@ class Tooltip:
             self.tooltip.destroy()
             self.tooltip = None
 
-# class LogViewer(tk.Toplevel):
-#     def __init__(self, parent, username):
-#         super().__init__(parent)
-#         self.title("Activity Logs")
-
-        
-#         self.tree.heading('#0', text='ID')
-#         self.tree.column('#0', width=50)
-#         for col in ('Time', 'Action', 'Type', 'Path', 'Details'):
-#             self.tree.heading(col, text=col)
-#             self.tree.column(col, width=150)
-        
-#         logs = get_user_logs(username)
-#         for log in logs:
-#             self.tree.insert('', 'end', values=log)
-        
-#         self.tree.pack(expand=True, fill='both')
-
 class LogViewer(tk.Toplevel):
     def __init__(self, parent, username):
         super().__init__(parent)
@@ -160,6 +142,16 @@ class FileManagerGUI:
         self.current_dir = os.getcwd()
 
         self.sort_by = "name"
+
+        self.inactivity_timeout = 30*60*1000
+        self.last_activity_time = time.time()*1000
+        self.activity_timer_id = None
+
+        self.reset_inactivity_timer()
+        self.root.bind("<Key>", self.user_activity)
+        self.root.bind("<Motion>", self.user_activity)
+        self.root.bind("<Button>", self.user_activity)
+
         self.archive_mode = tk.BooleanVar(value=False)
         self.archive_age = tk.IntVar(value=30)
 
@@ -658,19 +650,7 @@ class FileManagerGUI:
         
         self.results_count_label.config(text="Results: 0 items found")
         self.search_status.config(text="Filters reset")
-1
-    def execute_search(self):
-        search_term = self.search_entry.get()
-        file_type = self.file_type_var.get()
-        date_filter = self.date_var.get()
-        size_filter = self.size_var.get()
 
-        extensions = self.get_extensions_for_file_type(file_type)
-        date_limit = self.get_date_limit(date_filter)
-
-        results = self.file_manager.recursive_search_with_filters(self.current_dir, search_term, extensions, date_limit, size_filter)
-
-        self.populate_search_results(results)
 
 
     def get_extensions_for_file_type(self, file_type):
