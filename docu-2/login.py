@@ -4,7 +4,7 @@ import os
 from tkinter import ttk
 from PIL import Image, ImageTk
 from database2 import create_database, register_user, login_user
-from automation import AutomationWindow
+from newautomation2 import AutomationWindow
 
 from gui2 import FileManagerGUI
 from utility import CustomDirectoryDialog
