@@ -137,7 +137,7 @@ class Dashboard:
         title.pack(pady=(5, 10))
         
         # Get file counts
-        home_dir = os.path.join(os.path.expanduser("~"), r"OneDrive\Desktop\TempNew")
+        home_dir = os.path.join(os.path.expanduser("~"), r"OneDrive\Desktop")
         text_count, image_count, video_count = self.parent.count_files_by_type(home_dir)
         total_count = max(1, text_count + image_count + video_count)
         
