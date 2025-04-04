@@ -47,7 +47,7 @@ jobs:
           Get-ChildItem -Recurse
       - name: Build with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --icon=AppIcon/DocuVault-icon.ico --add-data "AppIcon;AppIcon" main.py
+          pyinstaller --onefile --windowed --icon=AppIcon/DocuVault-icon.ico --add-data "AppIcon;AppIcon" ./path/to/main.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
