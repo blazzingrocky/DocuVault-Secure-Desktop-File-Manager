@@ -44,7 +44,7 @@ jobs:
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
       - name: Check directory structure
         run: |
-          Get-ChildItem -Recurse
+          Get-ChildItem -Recurse -File | Where-Object {$_.Name -like "*.py"} | Select-Object FullName
       - name: Build with PyInstaller
         run: |
           pyinstaller ./path/to/main.py
