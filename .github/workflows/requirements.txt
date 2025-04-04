@@ -1,7 +1,7 @@
 cryptography==44.0.2
 
 matplotlib==3.9.4
-nc_py_api==0.19.2
+nc_py_api==0.0.43
 numpy==2.2.4
 oschmod==0.3.12
 Pillow==11.2.0
@@ -37,6 +37,6 @@ flake8==7.1.0
 pyinstaller==6.5.0
 pdfminer.six==20231228
 pdfminer.six==20250327
-nc_py_api==0.19.2
+
 cryptography==44.0.2
 python_bcrypt==0.3.2
