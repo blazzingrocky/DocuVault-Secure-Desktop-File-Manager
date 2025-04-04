@@ -42,7 +42,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller pillow pycryptodome schedule requests
           pip install -r D:\a\DocuVault-Secure-Desktop-File-Manager\DocuVault-Secure-Desktop-File-Manager\.github\workflows\requirements.txt
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Check directory structure
         run: |
           Get-ChildItem -Recurse -File | Where-Object {$_.Name -like "*.py"} | Select-Object FullName
