@@ -14,5 +14,4 @@ pyinstaller==6.5.0
 customtkinter==5.2.2
 bcrypt==4.1.2
 pdfminer.six==20231228
-pdfminer.six==20250327
 python_bcrypt==0.3.2
