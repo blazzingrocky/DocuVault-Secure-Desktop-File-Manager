@@ -131,9 +131,7 @@ class AutomationWindow(tk.Toplevel):
             
         # Get master password if not set
         if not hasattr(self.encryptor, 'master_password') or not self.encryptor.master_password:
-            password = simpledialog.askstring("Encryption Password", 
-                                            "Enter encryption password:", 
-                                            show='*')
+            password = self.username
             if not password:
                 return
             self.encryptor.set_master_password(password)
@@ -172,9 +170,7 @@ class AutomationWindow(tk.Toplevel):
             
         # Get master password if not set
         if not hasattr(self.encryptor, 'master_password') or not self.encryptor.master_password:
-            password = simpledialog.askstring("Decryption Password", 
-                                            "Enter decryption password:", 
-                                            show='*')
+            password = self.username
             if not password:
                 return
             self.encryptor.set_master_password(password)
@@ -1531,7 +1527,7 @@ class AutomationWindow(tk.Toplevel):
                     2: 'technical'
                 }
                 try:
-                    requests.get('http://localhost:8000/docs', timeout=4)
+                    requests.get('http://10.145.65.74:8000/docs', timeout=4)
                 except requests.ConnectionError:
                     messagebox.showerror(
                         "AI Service Offline",
@@ -1546,7 +1542,7 @@ class AutomationWindow(tk.Toplevel):
                 with open('__temp__.txt', 'rb') as f:
                     files = {'file': f}
                     response = requests.post(
-                        'http://localhost:8000/predict_txt',
+                        'http://10.145.65.74:8000/predict_txt',
                         files=files,
                         timeout=7
                     )
