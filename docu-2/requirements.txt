@@ -1,0 +1,15 @@
+tkinter
+pillow
+pycryptodome
+schedule
+requests
+matplotlib
+plotly
+customtkinter
+numpy
+bcrypt
+sqlite3
+oschmod
+pdfminer.six
+nc-py-api
+cryptography
