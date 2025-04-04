@@ -1368,7 +1368,6 @@ class FileManagerGUI:
                     context_menu.add_separator()
 
                     if item_type == 'file':
-                        context_menu.add_command(label="Archive",command=lambda: self.archive_old_files())
                         context_menu.add_command(label="Upload to Cloud", 
                                                 command=lambda: self.upload_to_cloud(item_path))
                     context_menu.add_command(label="Properties", command=lambda: self.show_properties(item_path))
