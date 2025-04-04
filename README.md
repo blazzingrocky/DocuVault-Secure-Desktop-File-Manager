@@ -187,4 +187,4 @@ Version control for important documents
 
 Extended file preview capabilities
 
-Enhanced Taggin feature of files
+Include tagging feature of files
