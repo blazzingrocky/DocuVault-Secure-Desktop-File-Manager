@@ -14,7 +14,7 @@ schedule==1.2.0
 requests==2.32.3
 
 bcrypt==4.1.2
-sqlite3==3.13.2
+
 oschmod==0.3.12
 pytest==8.0.2
 flake8==7.1.0
@@ -28,7 +28,7 @@ plotly==4.14.3
 customtkinter==5.2.2
 
 bcrypt==4.1.2
-sqlite3==3.13.2
+
 oschmod==0.3.12
 pdfminer.six==20231228
 cryptography==42.0.5
