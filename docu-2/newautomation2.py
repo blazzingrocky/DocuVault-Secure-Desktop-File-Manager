@@ -33,7 +33,7 @@ class Tooltip:
         self.tooltip.wm_overrideredirect(True)
         self.tooltip.wm_geometry(f"+{x}+{y}")
         label = ttk.Label(self.tooltip, text=self.text,
-                          background="#ffffe0", relief="solid", borderwidth=1,
+                          background="#333333", foreground="#ffffff", relief="solid", borderwidth=1,
                           padding=(5, 3))
         label.pack()
 
@@ -47,12 +47,13 @@ class AutomationWindow(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("Automation Dashboard")
-        self.geometry("900x600")
+        self.geometry("1000x600")
         self.minsize(800, 500)
         self.automation_folder = automation_folder
         self.username = username
         self.sort_by = "name"
         self.bin_dir = os.path.join(os.path.expanduser('~'), 'DocuVault_Bin')
+        self.setup_shortcuts()
         self.search_results_window = None
         self.initialize_encryption()
         
@@ -61,6 +62,26 @@ class AutomationWindow(tk.Toplevel):
             self.iconbitmap(r"AppIcon\DocuVault-icon.ico")
         except:
             pass
+
+        # Apply Azure dark theme - check if it's already loaded
+        try:
+            # Check if Azure theme is already available
+            available_themes = self.tk.call("ttk::style", "theme", "names")
+            
+            # Only load the theme if it's not already loaded
+            if "azure-dark" not in available_themes:
+                self.tk.call("source", "azure.tcl")
+                
+            # Apply the theme (this works whether newly loaded or already available)
+            self.tk.call("set_theme", "dark")
+        except tk.TclError as e:
+            # Fallback to standard themes if Azure is not available
+            print(f"Azure theme error: {e}")
+            style = ttk.Style()
+            try:
+                style.theme_use('vista' if os.name == 'nt' else 'clam')
+            except tk.TclError:
+                style.theme_use('default')
             
         # Set up file manager for operations
         if hasattr(parent, 'file_manager'):
@@ -77,7 +98,23 @@ class AutomationWindow(tk.Toplevel):
             self.create_auto_folders()
             self.update_file_list()
 
-# Then add these methods to the AutomationWindow class
+    def setup_shortcuts(self):
+        self.bind("<Alt-Up>", lambda e: self.go_to_parent_directory())
+        # File operations
+        self.bind("<Delete>", lambda e: self.delete_item())
+        self.bind("<F5>", lambda e: self.update_file_list())
+        
+        self.bind("<Control-a>", self.select_all)
+        
+        # Copy and move operations
+        self.bind("<Control-c>", lambda e: self.copy_item())
+        self.bind("<Control-x>", lambda e: self.move_item())
+        
+        # Create file/folder
+        self.bind("<Control-n>", lambda e: self.create_folder())
+        
+        # Search files
+        self.bind("<Control-f>", lambda e: self.search_files())
 
     def initialize_encryption(self):
         """Initialize the encryption system"""
@@ -166,10 +203,17 @@ class AutomationWindow(tk.Toplevel):
         
         if decrypted_count > 0:
             messagebox.showinfo("Decryption Complete", f"Successfully decrypted {decrypted_count} file(s)")
+
     def create_setup_ui(self):
         """Create UI for initial setup when automation folder doesn't exist yet"""
         setup_frame = ttk.Frame(self, padding=20)
         setup_frame.pack(expand=True, fill="both")
+
+        # Apply theme to setup UI
+        style = ttk.Style()
+        if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
+            style.configure("TLabel", foreground="white")
+            style.configure("TButton", background="#404040", foreground="white")
         
         # Header
         header_label = ttk.Label(setup_frame, text="Automation Setup", 
@@ -194,13 +238,12 @@ class AutomationWindow(tk.Toplevel):
 
     def create_main_ui(self):
         """Create the main UI with all automation features"""
-        # Create styles
+        # Apply dark theme adjustments for specific widgets
         style = ttk.Style()
-        try:
-            style.theme_use('vista' if os.name == 'nt' else 'clam')
-        except tk.TclError:
-            style.theme_use('default')
-            
+        if self.tk.call("ttk::style", "theme", "use") == "azure-dark":
+            style.configure("Treeview", background="#2a2a2a", fieldbackground="#2a2a2a", foreground="white")
+            style.map('Treeview', background=[('selected', '#0078d7')])
+        
         # Top toolbar with navigation
         self.create_toolbar()
         
@@ -585,8 +628,8 @@ class AutomationWindow(tk.Toplevel):
                 
                 context_menu = Menu(self, tearoff=0)
                 
+                context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
                 if item_type == 'file':
-                    context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
                     context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))
                     context_menu.add_separator()
                     
@@ -594,22 +637,19 @@ class AutomationWindow(tk.Toplevel):
                 context_menu.add_command(label="Copy", command=self.copy_item)
                 context_menu.add_command(label="Move", command=self.move_item)
                 context_menu.add_command(label="Delete", command=self.delete_item)
-                context_menu.add_separator()
                 context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
                 
                 if item_type == 'file':
                     context_menu.add_separator()
                     context_menu.add_command(label="Classify This File", 
                                           command=lambda: self.classify_and_upload(item_path))
-                context_menu.add_separator()
-
-
-
-                if self.encryptor.is_file_encrypted(item_path):
-                    context_menu.add_command(label="Decrypt", command=self.decrypt_selected_files)
-                else:
-                    context_menu.add_command(label="Encrypt", command=self.encrypt_selected_files)
-                    
+                    context_menu.add_separator()
+                    # Check if the file is encrypted
+                    if self.encryptor.is_file_encrypted(item_path):
+                        context_menu.add_command(label="Decrypt", command=self.decrypt_selected_files)
+                    else:
+                        context_menu.add_command(label="Encrypt", command=self.encrypt_selected_files)
+                        
                 context_menu.tk_popup(event.x_root, event.y_root)
         else:
             # Clicked on empty space - show different context menu
@@ -660,6 +700,7 @@ class AutomationWindow(tk.Toplevel):
         """Return to the main file manager"""
         self.grab_release()  # Release modal grab if any
         self.destroy()
+
     def open_file(self, item_path):
         """Override open_file to handle encrypted files"""
         # Check if the file is encrypted
@@ -749,25 +790,14 @@ class AutomationWindow(tk.Toplevel):
                                 watcher_data['running'] = False
                                 break
                             except Exception as e:
-                                print(f"Error re-encrypting file: {str(e)}")
+                                messagebox.showerror('Error', f"Error re-encrypting file: {str(e)}")
                     else:
                         # File no longer exists, stop watching
                         watcher_data['running'] = False
                         break
                 except Exception as e:
-                    print(f"Error in file watcher: {str(e)}")
+                    messagebox.showerror('Error',f"Error in file watcher: {str(e)}")
                 time.sleep(check_interval)
-    # def open_file(self, item_path):
-    #     """Open a file with the default application"""
-    #     if os.path.isfile(item_path):
-    #         success, message = self.file_manager.open_file(item_path)
-    #         if not success:
-    #             messagebox.showerror("Error", message)
-                
-    #     elif os.path.isdir(item_path):
-    #         self.navigate_to(item_path)
-    #     else:
-    #         messagebox.showinfo("Info", "Selected item cannot be opened")
 
     def open_with(self, item_path):
         """Open a file with a selected application"""
@@ -910,7 +940,6 @@ class AutomationWindow(tk.Toplevel):
         destination = dest_dialog.selected_path
         if destination:
             result = self.file_manager.move_item(items_to_move, destination)
-            print("No of items moved: ", result["success_count"])
             if result["success_count"] > 0:
                 messagebox.showinfo("Success", f"Successfully moved {result['success_count']} item(s) to {result['destination']}")
             
@@ -952,6 +981,7 @@ class AutomationWindow(tk.Toplevel):
         self.clipboard_clear()
         self.clipboard_append(item_path)
         self.update_status(f"Path copied to clipboard: {item_path}")
+
     def search_files(self):
         self.grab_release()
         original_dir = self.current_dir
@@ -1150,16 +1180,10 @@ class AutomationWindow(tk.Toplevel):
         # Update status
         self.search_status.config(text="Search completed")
         
-        # Ask about cloud search
-        # if messagebox.askyesno("Cloud Search", "Search in Nextcloud storage?"):
-        #     if self.cloud and self.cloud.nc:
-        #         self.cloud.search_files(search_term, callback=self.display_cloud_results)
-        #     else:
-        #         messagebox.showinfo("Cloud Search", "Please connect to cloud first")
-        
         # Bring search window back to focus
         self.search_results_window.lift()
         self.search_results_window.focus_set()
+
     def on_search_window_close(self):
         self.search_results_window.destroy()
         self.search_results_window = None
@@ -1167,6 +1191,7 @@ class AutomationWindow(tk.Toplevel):
         self.lift()
         self.focus_set()  
         # Set focus to search entry
+
     def recursive_search_with_filters(self, start_dir, search_term, extensions, date_limit, size_filter):
         results = []
         try:
@@ -1280,6 +1305,7 @@ class AutomationWindow(tk.Toplevel):
         
         self.results_count_label.config(text="Results: 0 items found")
         self.search_status.config(text="Filters reset")
+
     def on_search_double_click(self, event):
         try:
             item_id = self.search_tree.selection()[0]
@@ -1297,32 +1323,11 @@ class AutomationWindow(tk.Toplevel):
                 self.grab_set()
             elif os.path.isdir(item_path):
                 self.navigate_to(item_path)
-                # Close search window after navigating
-                if self.search_results_window:
-                    self.search_results_window.destroy()
-                    self.search_results_window = None
+            # Close search window after navigating
+            if self.search_results_window:
+                self.search_results_window.destroy()
+                self.search_results_window = None
 
-    # def on_search_double_click(self, event):
-    #     try:
-    #         item_id = self.search_tree.selection()[0]
-    #     except IndexError:
-    #         return
-            
-    #     item_values = self.search_tree.item(item_id, 'values')
-    #     if item_values:
-    #         item_path = item_values[1]
-    #         if os.path.isfile(item_path):
-    #             # Release grab before opening file
-    #             self.grab_release()
-    #             self.file_manager.open_file(item_path)
-    #             # Re-grab after file is opened
-    #             self.grab_set()
-    #         elif os.path.isdir(item_path):
-    #             self.navigate_to(item_path)
-    #             # Close search window after navigating
-    #             if self.search_results_window:
-    #                 self.search_results_window.destroy()
-    #                 self.search_results_window = None
 
     def show_search_context_menu(self, event):
         item = self.search_tree.identify('item', event.x, event.y)
@@ -1338,18 +1343,11 @@ class AutomationWindow(tk.Toplevel):
                 context_menu = Menu(self.parent, tearoff=0)
                 
                 # Add context menu items
-                # Add cloud operations
-                if 'cloud' in self.search_tree.item(item, 'tags'):
-                    context_menu.add_command(label="Download from Cloud", 
-                                        command=lambda: self.download_cloud_item(item_path))
-                    context_menu.add_command(label="Share Cloud File",
-                                        command=lambda: self.share_cloud_item(item_path))
-                    context_menu.add_command(label="Delete from Cloud", command=lambda: self.delete_cloud_item(item_path))
-                else:
-                    context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))                
-                    context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))                                
-                    context_menu.add_command(label="Show in Folder", command=lambda: self.reveal_in_explorer(item_path))                
+                context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))                
+                context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))                                
+                context_menu.add_command(label="Show Location", command=lambda: self.reveal_in_explorer(item_path))                
                 context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
+                
                 context_menu.post(event.x_root, event.y_root)
 
     def reveal_in_explorer(self, item_path):
@@ -1384,109 +1382,12 @@ class AutomationWindow(tk.Toplevel):
                 self.file_tree.see(child)  # Scroll to make visible
                 break
 
-        # Bring window to front
-        self.parent.lift()
-        self.parent.attributes('-topmost', True)
-        self.parent.after(100, lambda: self.parent.attributes('-topmost', False))
-    # Search functionality 
-    # def search_files(self):
-    #     """Open search dialog"""
-    #     search_term = simpledialog.askstring("Search", "Enter search term:")
-    #     if search_term:
-    #         # Store original directory to return to later
-    #         original_dir = self.current_dir
-            
-    #         # Close any existing search window
-    #         if self.search_results_window and tk.Toplevel.winfo_exists(self.search_results_window):
-    #             self.search_results_window.destroy()
-                
-    #         # Create new search results window
-    #         self.search_results_window = tk.Toplevel(self)
-    #         self.search_results_window.title("Search Results")
-    #         self.search_results_window.geometry("600x400")
-            
-    #         self.search_tree = ttk.Treeview(self.search_results_window)
-    #         self.search_tree.pack(expand=True, fill=tk.BOTH)
-            
-    #         # Configure columns
-    #         self.search_tree["columns"] = ("path",)
-    #         self.search_tree.column("#0", width=200, minwidth=200)
-    #         self.search_tree.column("path", width=400, minwidth=200)
-    #         self.search_tree.heading("#0", text="Name")
-    #         self.search_tree.heading("path", text="Path")
-            
-    #         # Bind events
-    #         self.search_tree.bind("<Button-3>", self.show_search_context_menu)
-    #         self.search_tree.bind("<Double-1>", self.on_search_double_click)
-            
-    #         # Perform search
-    #         self.recursive_search(self.automation_folder, search_term)
-            
-    #         # Return to original directory
-    #         self.current_dir = original_dir
-    #         self.update_file_list()
+        # Set focus to file tree
+        self.grab_set()
+        if self.search_results_window:
+                self.search_results_window.destroy()
+                self.search_results_window = None
 
-    # def recursive_search(self, start_dir, search_term, parent=""):
-    #     """Search recursively for files/folders matching search term"""
-    #     try:
-    #         for item in os.listdir(start_dir):
-    #             item_path = os.path.join(start_dir, item)
-                
-    #             if search_term.lower() in item.lower():
-    #                 # Add icon based on item type
-    #                 if os.path.isfile(item_path):
-    #                     icon = "📄 "  # Document icon
-    #                 else:
-    #                     icon = "📁 "  # Folder icon
-                        
-    #                 self.search_tree.insert(parent, 'end', text=f"{icon}{item}", values=(item_path,), open=False)
-                    
-    #             if os.path.isdir(item_path):
-    #                 self.recursive_search(item_path, search_term, parent)
-    #     except Exception as e:
-    #         pass  # Skip directories we can't access
-
-    # def on_search_double_click(self, event):
-    #     """Handle double click on search results"""
-    #     try:
-    #         item_id = self.search_tree.selection()[0]
-    #     except IndexError:
-    #         return
-            
-    #     item_values = self.search_tree.item(item_id, 'values')
-    #     if item_values:
-    #         item_path = item_values[0]
-            
-    #         if os.path.isfile(item_path):
-    #             self.open_file(item_path)
-    #         elif os.path.isdir(item_path):
-    #             self.navigate_to(item_path)
-    #             # Close search window
-    #             self.search_results_window.destroy()
-
-    # def show_search_context_menu(self, event):
-    #     """Show context menu for search results"""
-    #     item = self.search_tree.identify('item', event.x, event.y)
-    #     if item:
-    #         self.search_tree.selection_set(item)
-    #         item_values = self.search_tree.item(item, 'values')
-            
-    #         if item_values and item_values[0]:
-    #             item_path = item_values[0]
-                
-    #             context_menu = Menu(self, tearoff=0)
-    #             context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
-    #             context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))
-    #             context_menu.add_command(label="Show in Folder", 
-    #                                    command=lambda: self.show_in_folder(item_path))
-    #             context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
-                
-    #             if os.path.isfile(item_path):
-    #                 context_menu.add_separator()
-    #                 context_menu.add_command(label="Classify This File", 
-    #                                       command=lambda: self.classify_and_upload(item_path))
-                                          
-    #             context_menu.post(event.x_root, event.y_root)
 
     def show_in_folder(self, item_path):
         """Navigate to the folder containing the item and highlight it"""
