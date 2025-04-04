@@ -64,10 +64,11 @@ ChatBot: Provides user assistance
 ## Testing
 Unittest module of Python have been used to test the backend functionalities.
 
-## Installation
+## INSTALLATION GUIDLINE
 
 ### Prerequisites
 Python 3.7 or higher
+Tailscale
 
 ### Required Python packages (install via pip):
 
@@ -111,9 +112,7 @@ Dashboard: View file statistics and storage usage at a glance
 
 2. Click the "Encrypt Files" button
 
-3. Set a master password for encryption/decryption
-
-4. Access encrypted files with password verification
+3. Click the "Decrypt Files" button
 
 ### Cloud Setup
 1.Go to Settings → Cloud Setup
@@ -123,6 +122,8 @@ Dashboard: View file statistics and storage usage at a glance
 3. Use the cloud buttons to synchronize and manage remote files
 
 Search cloud storage directly from the main interface
+
+4. Make sure Tailscale is installed in your machine
 
 
 ## Project Structure
@@ -185,3 +186,5 @@ Collaborative editing features
 Version control for important documents
 
 Extended file preview capabilities
+
+Enhanced Taggin feature of files
