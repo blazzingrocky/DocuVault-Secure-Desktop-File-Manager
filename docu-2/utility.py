@@ -61,14 +61,13 @@ class CustomDirectoryDialog(tk.Toplevel):
         
         # Navigation buttons
         btn_frame = tk.Frame(self)
-
         btn_frame.pack(fill = tk.X, pady=5)
         
-        tk.Button(btn_frame, text="Cancel", command=self.destroy).pack(side=tk.RIGHT, padx=5)
-        tk.Button(btn_frame, text="Select", command=self.on_select).pack(side=tk.RIGHT, padx=5)
-        tk.Button(btn_frame, text="↩ Back", command=self.go_back).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="🏠 Home", command=lambda: self.navigate_to_special(os.path.expanduser("~"))).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="💻 Desktop", command=lambda: self.navigate_to_special(os.path.join(os.path.expanduser("~"), "OneDrive\\Desktop"))).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Cancel", command=self.destroy).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btn_frame, text="Select", command=self.on_select).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btn_frame, text="↩ Back", command=self.go_back).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="🏠 Home", command=lambda: self.navigate_to_special(os.path.expanduser("~"))).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="💻 Desktop", command=lambda: self.navigate_to_special(os.path.join(os.path.expanduser("~"), "OneDrive\\Desktop"))).pack(side=tk.LEFT, padx=5)
         
         # Initial population with depth control
         # Single-click selection binding
@@ -208,6 +207,10 @@ class CustomFileDialog(tk.Toplevel):
         self.geometry("600x400")
 
         # Set application icon
+        try:
+            self.iconbitmap("AppIcon\\DocuVault-icon.ico")
+        except Exception as e:
+            pass
         self.selected_file = None
         self.temp_selection = None
         self.current_dir = initial_dir
@@ -232,18 +235,18 @@ class CustomFileDialog(tk.Toplevel):
         self.file_tree.heading("type", text="Type", anchor=tk.W)
 
         # Add tag configurations
-        self.file_tree.tag_configure('file', foreground='blue')
-        self.file_tree.tag_configure('folder', foreground='green')
+        self.file_tree.tag_configure('file', foreground='#00bfff')
+        self.file_tree.tag_configure('folder', foreground='gray')
         self.file_tree.tag_configure('parent', foreground='gray')
 
         # Navigation controls
         nav_frame = tk.Frame(self)
-        nav_frame.pack(pady=5)
-        ttk.Button(nav_frame, text="Select", command=self.on_select).pack(side=tk.LEFT, padx=5)
-        ttk.Button(nav_frame, text="Cancel", command=self.destroy).pack(side=tk.LEFT, padx=5)
+        nav_frame.pack(fill=tk.X, pady=5)
+        ttk.Button(nav_frame, text="Cancel", command=self.destroy).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(nav_frame, text="Select", command=self.on_select).pack(side=tk.RIGHT, padx=5)
         ttk.Button(nav_frame, text="↩ Back", command=self.go_back).pack(side=tk.LEFT, padx=5)
-        ttk.Button(nav_frame, text="🏠 Home", 
-                 command=lambda: self.navigate_to_special(os.path.expanduser("~"))).pack(side=tk.LEFT, padx=5)
+        ttk.Button(nav_frame, text="🏠 Home", command=lambda: self.navigate_to_special(os.path.expanduser("~"))).pack(side=tk.LEFT, padx=5)
+        ttk.Button(nav_frame, text="💻 Desktop", command=lambda: self.navigate_to_special(os.path.join(os.path.expanduser("~"), "OneDrive\\Desktop"))).pack(side=tk.LEFT, padx=5)
 
         # Event bindings
         self.file_tree.bind("<<TreeviewSelect>>", self.on_single_click)
@@ -375,3 +378,4 @@ class CustomFileDialog(tk.Toplevel):
     def update_file_list(self):
         """Refresh the tree view"""
         self.populate_tree(self.file_tree, self.current_dir)
+
