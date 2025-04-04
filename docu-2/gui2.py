@@ -936,12 +936,11 @@ class FileManagerGUI:
         """Open a dialog with user settings including account deletion option"""
         settings_window = tk.Toplevel(self.root)
         settings_window.title("DocuVault Settings")
-        settings_window.geometry("450x350")
+        settings_window.geometry("550x700")
+        settings_window.resizable(False, False)
         # Create main container with padding
         settings_frame = ttk.Frame(settings_window, padding=15)
         settings_frame.pack(fill="both", expand=True)
-        ttk.Label(settings_window, text="Settings", font=("Arial", 16, "bold")).pack(pady=10)
-        ttk.Label(settings_window, text="Add your settings options here").pack(pady=5)
         # Add header
         header_label = ttk.Label(settings_frame, text="User Settings", 
                             font=("Segoe UI", 14, "bold"))
