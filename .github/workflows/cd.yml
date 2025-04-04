@@ -47,7 +47,9 @@ jobs:
           Get-ChildItem -Recurse -File | Where-Object {$_.Name -like "*.py"} | Select-Object FullName
       - name: Build with PyInstaller
         run: |
-          python D:\a\DocuVault-Secure-Desktop-File-Manager\DocuVault-Secure-Desktop-File-Manager\docu-2\main.py
+          cd docu-2
+          pyinstaller --onefile main.py
+          timeout-minutes: 0.5  # Add a timeout
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
