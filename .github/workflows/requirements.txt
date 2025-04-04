@@ -24,7 +24,6 @@ pycryptodome==3.15.0
 schedule==1.2.0
 requests==2.32.3
 
-plotly==4.14.3
 customtkinter==5.2.2
 
 bcrypt==4.1.2
