@@ -26,7 +26,7 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
       - name: Test with pytest
         run: |
-          pytest
+          PYTHONPATH=$PYTHONPATH:$(pwd)/docu-2 pytest
 
   build:
     needs: test
@@ -41,7 +41,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller pillow pycryptodome schedule requests
-          pip install -r D:\a\DocuVault-Secure-Desktop-File-Manager\DocuVault-Secure-Desktop-File-Manager\.github\workflows\requirements.txt
+          if (Test-Path .github\workflows\requirements.txt) {
+            pip install -r .github\workflows\requirements.txt
+          }
       - name: Check directory structure
         run: |
           Get-ChildItem -Recurse -File | Where-Object {$_.Name -like "*.py"} | Select-Object FullName
@@ -49,11 +51,15 @@ jobs:
         run: |
           cd docu-2
           pyinstaller --onefile main.py
+      - name: Check dist directory
+        run: |
+          Get-ChildItem -Path docu-2\dist -Recurse
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: docuvault-executable
-          path: dist/
+          path: docu-2/dist/
+          retention-days: 5
 
   release:
     needs: build
@@ -66,12 +72,14 @@ jobs:
         with:
           name: docuvault-executable
           path: dist/
+      - name: List downloaded files
+        run: |
+          ls -la dist/
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            dist/main.exe
+          files: dist/*
           tag_name: v${{ github.run_number }}
           name: DocuVault Release v${{ github.run_number }}
           draft: false
