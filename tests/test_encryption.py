@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch, mock_open
 import os
 import tempfile
 import shutil
-
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "docu-2"))
 # Import the FileEncryptor class (assuming it's in a module named encryption_2)
 from encryption_2 import FileEncryptor
 
