@@ -12,11 +12,8 @@ from utility import CustomDirectoryDialog, compare_path
 from database2 import log_action, get_user_logs, delete_user_logs
 from cloud import CloudManager
 import schedule
-
 import matplotlib.pyplot as plt
 import plotly.express as px
-
-
 from dashboard import Dashboard
 import requests
 import webbrowser
@@ -279,10 +276,18 @@ class FileManagerGUI:
         if(archived_files["success_count"]>0):
             messagebox.showinfo("Archive", f"Archived {archived_files['success_count']} files.")
         self.update_file_list()
+
     def go_to_archive(self):
         allow_access(self.archive_dir)
-        self.current_dir = self.archive_dir
+            # Update history - truncate forward history if we've gone back and now moving in a new direction
+        if self.history_position < len(self.history) - 1:
+            self.history = self.history[:self.history_position+1]
+            
+        # Add the archive directory to history and update position
+        self.history.append(self.archive_dir)
+        self.history_position = len(self.history) - 1
         
+        self.current_dir = self.archive_dir
         self.update_file_list()
     def toggle_archive_options(self):
         if self.archive_mode.get():
@@ -687,7 +692,6 @@ class FileManagerGUI:
             else:
                 self.root.tk.call("set_theme", "dark")
         except Exception as e:
-            print(f"Error toggling theme: {e}")
             messagebox.showerror("Theme Error", f"Failed to toggle theme: {str(e)}")
 
     def create_widgets(self):
@@ -1090,6 +1094,14 @@ class FileManagerGUI:
     def go_to_root(self):
         if self.current_dir == self.bin_dir:
             restrict_access(self.bin_dir)
+        # Update history - truncate forward history if we've gone back and now moving in a new direction
+        if self.history_position < len(self.history) - 1:
+            self.history = self.history[:self.history_position+1]
+            
+        # Add the home directory to history and update position
+        self.history.append(os.path.expanduser('~'))
+        self.history_position = len(self.history) - 1
+        
         self.current_dir = os.path.expanduser('~')
         self.update_file_list()
 
@@ -1099,6 +1111,14 @@ class FileManagerGUI:
 
         desktop_path = os.path.join(os.path.expanduser('~'), r'OneDrive\Desktop')
         if os.path.exists(desktop_path):
+            # Update history - truncate forward history if we've gone back and now moving in a new direction
+            if self.history_position < len(self.history) - 1:
+                self.history = self.history[:self.history_position+1]
+                
+            # Add the desktop directory to history and update position
+            self.history.append(desktop_path)
+            self.history_position = len(self.history) - 1
+
             self.current_dir = desktop_path
             self.update_file_list()
         else:
@@ -1147,7 +1167,7 @@ class FileManagerGUI:
                 else:
                     context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))                
                     context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))                                
-                    context_menu.add_command(label="Show in Folder", command=lambda: self.reveal_in_explorer(item_path))                
+                    context_menu.add_command(label="Show Location", command=lambda: self.reveal_in_explorer(item_path))                
                 context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
                 context_menu.post(event.x_root, event.y_root)
 
@@ -1259,13 +1279,27 @@ class FileManagerGUI:
                         continue
                         
                     if os.path.isfile(item_path):
-                        tree.insert(parent, 'end', text=item, values=('file', item_path))
+                        # Add icon based on file type
+                        ext = os.path.splitext(item)[1].lower()
+                        if ext in ['.txt', '.doc', '.docx', '.pdf']:
+                            icon = "📄 "  # Document icon
+                        elif ext in ['.jpg', '.jpeg', '.png', '.gif']:
+                            icon = "🖼️ "  # Image icon
+                        elif ext in ['.mp4', '.avi', '.mov']:
+                            icon = "🎬 "  # Video icon
+                        elif ext in ['.mp3', '.wav']:
+                            icon = "🎵 "  # Audio icon
+                        else:
+                            icon = "📄 "  # Generic file icon
+
+                        tree.insert(parent, 'end', text=f"{icon}{item}", values=('file', item_path))
+
                     elif os.path.isdir(item_path):
                         # Skip junction points and special directories
                         if os.name == 'nt' and os.stat(item_path).st_file_attributes & 1024:
                             continue
                             
-                        tree_id = tree.insert(parent, 'end', text=item, 
+                        tree_id = tree.insert(parent, 'end', text=f"📁 {item}", 
                                         values=('folder', item_path), open=False)
                         # Limit recursion depth for stability
                         if depth < 3:
@@ -1317,21 +1351,26 @@ class FileManagerGUI:
                     context_menu.add_command(label="Delete", command=lambda: self.delete_item())
                     context_menu.add_command(label="Empty Bin", command=lambda: self.empty_bin())
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
-
+                    context_menu.add_separator()
                     context_menu.add_command(label="Properties", command=lambda: self.show_properties(item_path))
 
                 else:
                     context_menu.add_command(label="Open", command=lambda: self.open_file(item_path))
-                    context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))
+                    if item_type == 'file':
+                        context_menu.add_command(label="Open With", command=lambda: self.open_with(item_path))
+                        context_menu.add_separator()
+
                     context_menu.add_command(label="Rename", command=lambda: self.rename_item(item_path))
                     context_menu.add_command(label="Copy", command=lambda: self.copy_item())
                     context_menu.add_command(label="Move", command=lambda: self.move_item())
                     context_menu.add_command(label="Delete", command=lambda: self.delete_item())
-                    context_menu.add_command(label="Archive",command=lambda: self.archive_old_files())
                     context_menu.add_command(label="Copy Path", command=lambda: self.copy_path(item_path))
-                    context_menu.add_command(label="Upload to Cloud", 
-                                            command=lambda: self.upload_to_cloud(item_path))
+                    context_menu.add_separator()
 
+                    if item_type == 'file':
+                        context_menu.add_command(label="Archive",command=lambda: self.archive_old_files())
+                        context_menu.add_command(label="Upload to Cloud", 
+                                                command=lambda: self.upload_to_cloud(item_path))
                     context_menu.add_command(label="Properties", command=lambda: self.show_properties(item_path))
 
                 
@@ -1409,6 +1448,14 @@ class FileManagerGUI:
 
     def go_to_bin(self):
         allow_access(self.bin_dir)
+        # Update history - truncate forward history if we've gone back and now moving in a new direction
+        if self.history_position < len(self.history) - 1:
+            self.history = self.history[:self.history_position+1]
+            
+        # Add the bin directory to history and update position
+        self.history.append(self.bin_dir)
+        self.history_position = len(self.history) - 1
+
         self.current_dir = self.bin_dir
         self.update_file_list()
 
