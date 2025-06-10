@@ -80,7 +80,7 @@ pip install tkinter pillow pycryptodome schedule requests
 Clone the repository:
 
 text
-git clone https://github.com/yourusername/docuvault.git
+git clone https://github.com/blazzingrocky/DocuVault-Secure-Desktop-File-Manager.git
 cd docuvault
 
 ### Run the application:
