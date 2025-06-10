@@ -36,7 +36,7 @@ jobs:
       
       - name: Test with pytest
         run: |
-          PYTHONPATH=$PYTHONPATH:$(pwd)/docu-2 pytest
+          PYTHONPATH=$PYTHONPATH:$(pwd)/src pytest
 
   build:
     needs: test
@@ -65,18 +65,18 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            docu-2/build
-            docu-2/__pycache__
-          key: ${{ runner.os }}-pyinstaller-${{ hashFiles('docu-2/**/*.py') }}
+            src/build
+            src/__pycache__
+          key: ${{ runner.os }}-pyinstaller-${{ hashFiles('src/**/*.py') }}
       
       - name: Build with PyInstaller
         run: |
-          cd docu-2
+          cd src
           pyinstaller --onefile main.py
       
       - name: Check dist directory
         run: |
-          Get-ChildItem -Path docu-2\dist -Recurse
+          Get-ChildItem -Path src\dist -Recurse
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
