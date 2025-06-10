@@ -23,7 +23,7 @@ class TestFileManager(unittest.TestCase):
         self.archive_dir = tempfile.mkdtemp()
         
         # Create a test database connection
-        test_db_path = os.path.join(self.test_dir, 'test_filemanager.db')
+        test_db_path = os.path.join(self.test_dir, 'docuvault.db')
         
         # Create a FileManager instance with test database
         self.file_manager = FileManager("test_user", self.bin_dir, self.archive_dir)
