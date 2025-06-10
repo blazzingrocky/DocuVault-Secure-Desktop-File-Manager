@@ -6,6 +6,8 @@ import subprocess
 from unittest.mock import patch, MagicMock
 from io import StringIO
 import sqlite3
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "src"))
 
 # Import the FileManager class from filemanager.py
 from filemanager import FileManager
