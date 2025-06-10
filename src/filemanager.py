@@ -54,14 +54,17 @@ class FileManager:
 
 
     def get_automation_folder(self, username):
-        conn = sqlite3.connect('docuvault.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT automation_folder FROM users WHERE username = ?', (username,))
-        result = cursor.fetchone()
-        conn.close()
-        if result and result[0]:
-            return result[0]
-        else:
+        try:
+            conn = sqlite3.connect('docuvault.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT automation_folder FROM users WHERE username = ?', (username,))
+            result = cursor.fetchone()
+            conn.close()
+            if result and result[0]:
+                return result[0]
+            else:
+                return None
+        except sqlite3.OperationalError:
             return None
 
     def get_frequently_accessed_files(self, threshold=1):
