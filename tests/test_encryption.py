@@ -17,8 +17,6 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "src"))
 # Import the FileEncryptor class (assuming it's in a module named encryption)
 from encryption import FileEncryptor
 
-from automation import AutomationWindow
-
 class TestFileEncryption(unittest.TestCase):
     """Test cases for FileEncryptor encrypt_file and decrypt_file methods."""
     
