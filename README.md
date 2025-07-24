@@ -134,9 +134,9 @@ login.py: User authentication system
 
 gui.py: Main file manager interface
 
-newfilemanager.py: Core file operations implementation
+filemanager.py: Core file operations implementation
 
-newautomation.py: Automation and AI classification features
+automation.py: Automation and AI classification features
 
 encryption.py: File encryption/decryption functionality
 
