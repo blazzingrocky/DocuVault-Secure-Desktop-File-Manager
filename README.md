@@ -132,13 +132,13 @@ main.py: Application entry point
 
 login.py: User authentication system
 
-gui2.py: Main file manager interface
+gui.py: Main file manager interface
 
-newfilemanager2.py: Core file operations implementation
+newfilemanager.py: Core file operations implementation
 
-newautomation2.py: Automation and AI classification features
+newautomation.py: Automation and AI classification features
 
-encryption_2.py: File encryption/decryption functionality
+encryption.py: File encryption/decryption functionality
 
 database.py: SQLite database management
 
