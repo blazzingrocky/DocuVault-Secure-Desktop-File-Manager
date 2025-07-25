@@ -73,19 +73,16 @@ Tailscale
 
 ### Required Python packages (install via pip):
 
-text
 pip install tkinter pillow pycryptodome schedule requests
 
 ### Setup
 Clone the repository:
 
-text
 git clone https://github.com/blazzingrocky/DocuVault-Secure-Desktop-File-Manager.git
 cd docuvault
 
 ### Run the application:
 
-text
 python main.py
 On first run, create a new account to get started.
 
